@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gem 表编辑器 · gem.json</title>
+<style>
+  /* SECTION: tokens —— 与 Items 表编辑器同一套暗色等宽观感 */
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040; --warn:#E8B14C;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New","PingFang SC","Microsoft YaHei",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{
+    display:flex;gap:8px;align-items:center;padding:10px 14px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  header h1{font-size:15px;margin:0 12px 0 0;color:var(--text-strong);font-weight:normal}
+  button{
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px;
+  }
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select,textarea{
+    background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);
+    padding:5px 8px;font-family:inherit;font-size:13px;width:100%;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  #searchInput{width:170px}
+  .stat{color:var(--text-dim);font-size:12px;margin-left:auto}
+  .stat b.err{color:var(--danger);font-weight:normal}
+  .stat b.ok{color:var(--gain);font-weight:normal}
+
+  /* SECTION: filterbar */
+  .filterbar{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding:8px 14px;background:#161616;border-bottom:1px solid var(--line);font-size:12px;
+  }
+  .filterbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim)}
+  .filterbar select{width:auto;padding:3px 6px;font-size:12px}
+  .fsep{width:1px;height:18px;background:var(--line)}
+  .tri{
+    border:1px solid var(--line);background:var(--panel2);padding:4px 10px;
+    font-size:12px;cursor:pointer;color:var(--text-dim);display:inline-flex;
+    align-items:center;gap:5px;border-radius:3px;
+  }
+  .tri b{font-weight:normal;color:#777}
+  .tri[data-state="on"]{border-color:var(--gain);color:var(--gain)}
+  .tri[data-state="on"] b{color:var(--gain)}
+  .tri[data-state="off"]{border-color:var(--danger);color:var(--danger)}
+  .tri[data-state="off"] b{color:var(--danger)}
+  #resetFilter{margin-left:auto;padding:4px 10px;font-size:12px}
+
+  /* SECTION: layout */
+  main{flex:1;display:flex;min-height:0}
+  .left{flex:1;min-width:0;overflow:auto;border-right:1px solid var(--line)}
+  .right{width:600px;flex:none;overflow:auto;padding:14px;background:var(--panel)}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{position:sticky;top:0;background:var(--panel2);color:var(--text-dim);font-weight:normal;font-size:12px;z-index:1}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.selected{background:#1A2A3A}
+  tbody tr.dragging{opacity:.35}
+  tbody tr.drop-before td{border-top:2px solid var(--accent)}
+  tbody tr.drop-after td{border-bottom:2px solid var(--accent)}
+  td.drag{cursor:grab;color:#4a4a4a;text-align:center;user-select:none;width:26px}
+  td.drag:active{cursor:grabbing}
+  .num{text-align:right}
+  .dim{color:var(--text-dim)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+  .pill{
+    display:inline-block;padding:0 6px;border-radius:3px;font-size:11px;
+    border:1px solid var(--line);color:var(--text-dim);margin-right:4px;
+  }
+  .pill.err{border-color:var(--danger);color:var(--danger)}
+  .pill.warn{border-color:var(--warn);color:var(--warn)}
+  .pill.ok{border-color:#2c6b4a;color:var(--gain)}
+
+  /* SECTION: form */
+  .field{margin-bottom:9px}
+  .field label{display:block;color:var(--text-dim);font-size:12px;margin-bottom:3px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px}
+  .section-title{color:var(--accent);font-size:13px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .section-title:first-child{margin-top:0}
+  .bool-item{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12px;color:var(--text)}
+  .bool-item input{display:none}
+  .bool-item .track{
+    width:30px;height:16px;border-radius:8px;background:#2a2a2a;
+    border:1px solid var(--line);position:relative;flex:none;margin-left:auto;
+    transition:background .15s,border-color .15s;
+  }
+  .bool-item .track::after{
+    content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;
+    border-radius:50%;background:#666;transition:transform .15s,background .15s;
+  }
+  .bool-item input:checked + .track{background:#16324d;border-color:var(--accent)}
+  .bool-item input:checked + .track::after{transform:translateX(14px);background:var(--accent)}
+  .chk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 8px;margin-top:4px}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer}
+  .chk input{width:auto;accent-color:var(--accent)}
+  .tagline{font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.5}
+  .mini{font-size:11px;color:var(--text-dim)}
+  .row-flex{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+  .row-flex .field{flex:1;min-width:0;margin-bottom:0}
+  .note{
+    border-left:3px solid var(--warn);background:#1E1A12;padding:6px 9px;
+    font-size:11px;color:#D6BE93;margin:8px 0;line-height:1.6;
+  }
+  .note.bad{border-left-color:var(--danger);background:#1E1414;color:#E4B0B0}
+  .note.good{border-left-color:var(--gain);background:#121E18;color:#A9DCBE}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .actions button{font-size:12px;padding:4px 10px}
+  pre.preview{
+    background:#0E0E0E;border:1px solid var(--line);padding:9px;margin:6px 0 0;
+    font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;
+    max-height:230px;overflow:auto;color:#9FD1FF;
+  }
+  .issues{max-height:230px;overflow:auto;border:1px solid var(--line);background:#0E0E0E}
+  .issues .it{padding:5px 9px;border-bottom:1px solid #1F1F1F;font-size:11.5px;cursor:pointer;display:flex;gap:8px}
+  .issues .it:hover{background:#1A1A1A}
+  .issues .it .lv{flex:none;width:34px}
+  .issues .it.e .lv{color:var(--danger)}
+  .issues .it.w .lv{color:var(--warn)}
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+  .statbox{background:#0E0E0E;border:1px solid var(--line);padding:6px 8px}
+  .statbox .k{font-size:11px;color:var(--text-dim)}
+  .statbox .v{font-size:14px;color:var(--text-strong)}
+  .bar{height:6px;background:#0E0E0E;border:1px solid var(--line);position:relative;margin-top:4px}
+  .bar>i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);display:block}
+  .rg-card{border:1px solid #2E3A4A;background:#141A22;border-radius:6px;padding:8px 10px;margin:8px 0}
+  .rg-head{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .rg-head input[type=text]{flex:1;min-width:90px}
+  .rg-head .rg-prob{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);flex:none}
+  .rg-head .rg-prob input{width:90px}
+  .rg-table{width:100%;border-collapse:collapse;margin-top:4px}
+  .rg-table th,.rg-table td{padding:4px 5px;border-bottom:1px solid #222;text-align:left;font-size:12px}
+  .rg-table th{color:var(--text-dim);font-weight:normal;font-size:11px}
+  .rg-table td input,.rg-table td select{padding:3px 6px;font-size:12px}
+  .del{background:#0E0E0E;border:1px solid var(--line);color:var(--text-dim);padding:3px 8px;cursor:pointer;font-size:11px}
+  .del:hover{border-color:var(--danger);color:var(--danger)}
+  .empty{color:var(--text-dim);font-size:12px}
+  .mini{padding:4px 10px;font-size:12px;background:#0E0E0E;border:1px solid var(--line);color:var(--accent);cursor:pointer}
+  .mini:hover{border-color:var(--accent)}
+  @media(max-width:900px){
+    body{height:auto;min-height:100vh;overflow:auto}
+    main{flex-direction:column}
+    .left{border-right:none;border-bottom:1px solid var(--line);max-height:46vh}
+    .right{width:auto;flex:none;overflow:visible}
+    .grid2,.grid3,.chk-grid,.statgrid{grid-template-columns:1fr 1fr}
+    #searchInput{width:130px}
+    .stat{margin-left:0;width:100%}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Gem 编辑器 · gem.json</h1>
+  <button id="addBtn">＋ 新增</button>
+  <button id="dupBtn">⧉ 复制</button>
+  <button id="delBtn" class="danger">－ 删除</button>
+  <button id="importBtn">导入 gem.json</button>
+  <button id="importTagsBtn">导入档位表</button>
+  <button id="importItemsBtn">导入 items.json</button>
+  <button id="exportBtn">导出 gem.json</button>
+  <input type="text" id="searchInput" placeholder="搜索 Key / ID / 名字 / 效果">
+  <span class="stat" id="stat"></span>
+</header>
+
+<div class="filterbar">
+  <label>Tier <select id="fTier"></select></label>
+  <label>Rank <select id="fRank"></select></label>
+  <label>属性 <select id="fStat"></select></label>
+  <label>容器 <select id="fContainer"></select></label>
+  <span class="fsep"></span>
+  <button class="tri" data-tri="Rank" data-state="all">已定档 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="IsSaleable" data-state="all">可出售 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="EffectDesc" data-state="all">有说明 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="__issue" data-state="all">有报错 · <b class="tri-val">全部</b></button>
+  <button id="resetFilter">重置筛选</button>
+</div>
+
+<main>
+  <div class="left">
+    <table>
+      <thead>
+        <tr>
+          <th></th><th>Key</th><th>_id</th><th>名字</th><th>Rank</th>
+          <th>效果（基础 → 实际）</th><th class="num">Price</th>
+          <th class="num">堆叠</th><th>尺寸</th><th>容器</th><th>校验</th>
+        </tr>
+      </thead>
+      <tbody id="listBody"></tbody>
+    </table>
+  </div>
+  <div class="right" id="detail"></div>
+</main>
+
+<input type="file" id="importInput" accept=".json" hidden>
+<input type="file" id="tagsInput" accept=".json" hidden>
+<input type="file" id="itemsInput" accept=".json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   常量（与 RPG 页面的 normalizeGem / GEM_PROP_KEYS 对齐）
+   ========================================================= */
+const LS_KEY = 'gem_editor_v1';
+const LS_TAGS = 'gem_editor_tags_v1';
+const GEM_FILE = 'gem.json';
+
+/* 游戏导入后唯一会被保留的字段，其余一律丢弃 */
+const GEM_PROP_KEYS = ['Name','ShortName','Price','StackMaxSize','Width','Height','Weight',
+                       'IsSaleable','AllowedContainers','Stats','BaseStats','GemStats',
+                       'EffectDesc','Rank','rank','IsGem','Tags'];
+/* 导出顺序 */
+const PROPS_ORDER = ['Name','ShortName','Price','StackMaxSize','Width','Height','Weight',
+                     'IsSaleable','Rank','RollGroups','Stats','EffectDesc','Tags','AllowedContainers','IsGem'];
+/* 装备属性结算真正读取的 key */
+const LIVE_STATS = ['STR','DEF','MGA','MGD','HP','MP','SPD','LUK'];
+/* 写进 Stats 也不会生效的常见 key */
+const DEAD_STATS = ['CRT','T_CRT','Cont','GP'];
+const STAT_KEYS = LIVE_STATS.concat(DEAD_STATS);
+const STAT_LABEL = {
+  STR:'STR 物攻',DEF:'DEF 物防',MGA:'MGA 魔攻',MGD:'MGD 魔防',
+  LUK:'LUK 幸运',SPD:'SPD 速度',HP:'HP 生命上限',MP:'MP 魔法上限',
+  CRT:'CRT 暴击倍率',T_CRT:'T_CRT 暴击触发',Cont:'Cont 续航',GP:'GP 成长'
+};
+const CONTAINER_OPTIONS = ['bag','storage','pocket','safe','hotbar'];
+const CONTAINER_LABEL = {bag:'背包',storage:'仓库',pocket:'口袋',safe:'安全箱',hotbar:'快捷栏'};
+const TYPE_OPTIONS = ['宝石','装备','材料','消耗品','物品'];
+
+/* 内置档位表兜底；可用「导入档位表」以 Eq_tags.json 覆盖 */
+const DEFAULT_TAGS = {
+  "version": 1,
+  "probabilitySumTolerance": 0.0001,
+  "ranks": [
+    {
+      "rank": 1,
+      "key": "F-",
+      "color": "#BABABA",
+      "multiplier": 0.5,
+      "probability": 0.05,
+      "tier": "F",
+      "minLevel": 1
+    },
+    {
+      "rank": 2,
+      "key": "F",
+      "color": "#BABABA",
+      "multiplier": 0.7,
+      "probability": 0.05,
+      "tier": "F",
+      "minLevel": 1
+    },
+    {
+      "rank": 3,
+      "key": "F+",
+      "color": "#BABABA",
+      "multiplier": 0.8,
+      "probability": 0.05,
+      "tier": "F",
+      "minLevel": 1
+    },
+    {
+      "rank": 4,
+      "key": "D--",
+      "color": "#27A057",
+      "multiplier": 0.82,
+      "probability": 0.05,
+      "tier": "D",
+      "minLevel": 5
+    },
+    {
+      "rank": 5,
+      "key": "D-",
+      "color": "#27A057",
+      "multiplier": 0.86,
+      "probability": 0.05,
+      "tier": "D",
+      "minLevel": 5
+    },
+    {
+      "rank": 6,
+      "key": "D",
+      "color": "#27A057",
+      "multiplier": 0.88,
+      "probability": 0.05,
+      "tier": "D",
+      "minLevel": 5
+    },
+    {
+      "rank": 7,
+      "key": "D+",
+      "color": "#27A057",
+      "multiplier": 0.9,
+      "probability": 0.05,
+      "tier": "D",
+      "minLevel": 10
+    },
+    {
+      "rank": 8,
+      "key": "D++",
+      "color": "#27A057",
+      "multiplier": 0.93,
+      "probability": 0.05,
+      "tier": "D",
+      "minLevel": 15
+    },
+    {
+      "rank": 9,
+      "key": "C--",
+      "color": "#1B4DC0",
+      "multiplier": 0.95,
+      "probability": 0.0625,
+      "tier": "C",
+      "minLevel": 20
+    },
+    {
+      "rank": 10,
+      "key": "C-",
+      "color": "#1B4DC0",
+      "multiplier": 0.99,
+      "probability": 0.0625,
+      "tier": "C",
+      "minLevel": 20
+    },
+    {
+      "rank": 11,
+      "key": "C",
+      "color": "#1B4DC0",
+      "multiplier": 1.0,
+      "probability": 0.0625,
+      "tier": "C",
+      "minLevel": 25
+    },
+    {
+      "rank": 12,
+      "key": "C+",
+      "color": "#1B4DC0",
+      "multiplier": 1.01,
+      "probability": 0.0625,
+      "tier": "C",
+      "minLevel": 25
+    },
+    {
+      "rank": 13,
+      "key": "C++",
+      "color": "#1B4DC0",
+      "multiplier": 1.05,
+      "probability": 0.0625,
+      "tier": "C",
+      "minLevel": 30
+    },
+    {
+      "rank": 14,
+      "key": "B-",
+      "color": "#1B4DC0",
+      "multiplier": 1.07,
+      "probability": 0.0625,
+      "tier": "B",
+      "minLevel": 30
+    },
+    {
+      "rank": 15,
+      "key": "B",
+      "color": "#1B4DC0",
+      "multiplier": 1.1,
+      "probability": 0.0625,
+      "tier": "B",
+      "minLevel": 35
+    },
+    {
+      "rank": 16,
+      "key": "B+",
+      "color": "#1B4DC0",
+      "multiplier": 1.12,
+      "probability": 0.0625,
+      "tier": "B",
+      "minLevel": 35
+    },
+    {
+      "rank": 17,
+      "key": "A--",
+      "color": "#B02BF7",
+      "multiplier": 1.14,
+      "probability": 0.016,
+      "tier": "A",
+      "minLevel": 40
+    },
+    {
+      "rank": 18,
+      "key": "A-",
+      "color": "#B02BF7",
+      "multiplier": 1.18,
+      "probability": 0.016,
+      "tier": "A",
+      "minLevel": 40
+    },
+    {
+      "rank": 19,
+      "key": "A",
+      "color": "#B02BF7",
+      "multiplier": 1.2,
+      "probability": 0.016,
+      "tier": "A",
+      "minLevel": 42
+    },
+    {
+      "rank": 20,
+      "key": "A+",
+      "color": "#B02BF7",
+      "multiplier": 1.3,
+      "probability": 0.016,
+      "tier": "A",
+      "minLevel": 42
+    },
+    {
+      "rank": 21,
+      "key": "A++",
+      "color": "#B02BF7",
+      "multiplier": 1.5,
+      "probability": 0.016,
+      "tier": "A",
+      "minLevel": 42
+    },
+    {
+      "rank": 22,
+      "key": "S",
+      "color": "#FFC552",
+      "multiplier": 1.7,
+      "probability": 0.01495,
+      "tier": "S",
+      "minLevel": 42
+    },
+    {
+      "rank": 23,
+      "key": "SS",
+      "color": "#FFC553",
+      "multiplier": 2.0,
+      "probability": 0.00495,
+      "tier": "S",
+      "minLevel": 42
+    },
+    {
+      "rank": 24,
+      "key": "G",
+      "color": "#B01C1C",
+      "multiplier": 4.0,
+      "probability": 0.0001,
+      "tier": "G",
+      "minLevel": 42
+    }
+  ]
+};
+
+/* 内置示例宝石（导入游戏后可直接镶嵌，也可全部改掉） */
+const DEFAULT_GEMS = {
+  "900001": {
+    "_id": "900001",
+    "_name": "粗糙力量石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "粗糙力量石",
+      "ShortName": "力量石",
+      "Price": 120,
+      "StackMaxSize": 99,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "F+",
+      "Stats": {
+        "STR": 3
+      },
+      "EffectDesc": "粗糙力量石：力量 +2.4（基础 ×F+ 倍率 0.8）",
+      "Tags": [
+        "攻击",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900002": {
+    "_id": "900002",
+    "_name": "锐利石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "锐利石",
+      "ShortName": "锐利",
+      "Price": 900,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "C",
+      "Stats": {
+        "STR": 6
+      },
+      "EffectDesc": "锐利石：力量 +6（基础 ×C 倍率 1）",
+      "Tags": [
+        "攻击",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900003": {
+    "_id": "900003",
+    "_name": "赤火石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "赤火石",
+      "ShortName": "赤火",
+      "Price": 4500,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "B+",
+      "Stats": {
+        "STR": 10
+      },
+      "EffectDesc": "赤火石：力量 +11.2（基础 ×B+ 倍率 1.12）",
+      "Tags": [
+        "攻击",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900004": {
+    "_id": "900004",
+    "_name": "坚硬石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "坚硬石",
+      "ShortName": "坚硬",
+      "Price": 800,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "C+",
+      "Stats": {
+        "DEF": 6
+      },
+      "EffectDesc": "坚硬石：防御 +6.06（基础 ×C+ 倍率 1.01）",
+      "Tags": [
+        "防御",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900005": {
+    "_id": "900005",
+    "_name": "磐甲石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "磐甲石",
+      "ShortName": "磐甲",
+      "Price": 26000,
+      "StackMaxSize": 3,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "A-",
+      "Stats": {
+        "DEF": 14
+      },
+      "EffectDesc": "磐甲石：防御 +16.52（基础 ×A- 倍率 1.18）",
+      "Tags": [
+        "防御",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900006": {
+    "_id": "900006",
+    "_name": "生命石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "生命石",
+      "ShortName": "生命",
+      "Price": 600,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "D+",
+      "Stats": {
+        "HP": 40
+      },
+      "EffectDesc": "生命石：生命上限 +36（基础 ×D+ 倍率 0.9）",
+      "Tags": [
+        "生存",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900007": {
+    "_id": "900007",
+    "_name": "生机石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "生机石",
+      "ShortName": "生机",
+      "Price": 38000,
+      "StackMaxSize": 3,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "A",
+      "Stats": {
+        "HP": 120
+      },
+      "EffectDesc": "生机石：生命上限 +144（基础 ×A 倍率 1.2）",
+      "Tags": [
+        "生存",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900008": {
+    "_id": "900008",
+    "_name": "法力石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "法力石",
+      "ShortName": "法力",
+      "Price": 550,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "D",
+      "Stats": {
+        "MP": 30
+      },
+      "EffectDesc": "法力石：法力上限 +26.4（基础 ×D 倍率 0.88）",
+      "Tags": [
+        "魔法",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900009": {
+    "_id": "900009",
+    "_name": "魔能石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "魔能石",
+      "ShortName": "魔能",
+      "Price": 3600,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "B-",
+      "Stats": {
+        "MGA": 9
+      },
+      "EffectDesc": "魔能石：魔攻 +9.63（基础 ×B- 倍率 1.07）",
+      "Tags": [
+        "魔法",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900010": {
+    "_id": "900010",
+    "_name": "疾风珠",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "疾风珠",
+      "ShortName": "疾风",
+      "Price": 1200,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "C-",
+      "Stats": {
+        "SPD": 4
+      },
+      "EffectDesc": "疾风珠：速度 +3.96（基础 ×C- 倍率 0.99）",
+      "Tags": [
+        "速度",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900011": {
+    "_id": "900011",
+    "_name": "幸运符",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "幸运符",
+      "ShortName": "幸运",
+      "Price": 2000,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "",
+      "Stats": {
+        "LUK": 15
+      },
+      "EffectDesc": "幸运符：幸运 +15（镶嵌时按随机档位换算）；未定档",
+      "Tags": [
+        "幸运",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900012": {
+    "_id": "900012",
+    "_name": "双修石",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "双修石",
+      "ShortName": "双修",
+      "Price": 2600,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "C++",
+      "Stats": {
+        "STR": 5,
+        "DEF": 5
+      },
+      "EffectDesc": "双修石：力量 +5.25、防御 +5.25（基础 ×C++ 倍率 1.05）",
+      "Tags": [
+        "均衡",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900013": {
+    "_id": "900013",
+    "_name": "破碎魔晶",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "破碎魔晶",
+      "ShortName": "魔晶",
+      "Price": 700,
+      "StackMaxSize": 5,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.1,
+      "IsSaleable": true,
+      "Rank": "",
+      "Stats": {
+        "MGD": 7
+      },
+      "EffectDesc": "破碎魔晶：魔防 +7（镶嵌时按随机档位换算）；未定档",
+      "Tags": [
+        "防御",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  },
+  "900014": {
+    "_id": "900014",
+    "_name": "神匠之魂",
+    "_type": "宝石",
+    "_debugSample": true,
+    "_props": {
+      "Name": "神匠之魂",
+      "ShortName": "神匠",
+      "Price": 220000,
+      "StackMaxSize": 1,
+      "Width": 1,
+      "Height": 1,
+      "Weight": 0.3,
+      "IsSaleable": false,
+      "Rank": "S",
+      "Stats": {
+        "STR": 18,
+        "MGA": 18,
+        "HP": 150
+      },
+      "EffectDesc": "神匠之魂：力量 +30.6、魔攻 +30.6、生命上限 +255（基础 ×S 倍率 1.7）",
+      "Tags": [
+        "毕业",
+        "宝石"
+      ],
+      "AllowedContainers": [
+        "bag",
+        "storage",
+        "pocket",
+        "safe"
+      ],
+      "IsGem": true
+    }
+  }
+};
+
+/* =========================================================
+   档位表
+   ========================================================= */
+let tagTable = null;   // {version, probabilitySumTolerance, ranks:[...]}
+function ranks(){ return (tagTable && Array.isArray(tagTable.ranks)) ? tagTable.ranks : []; }
+function rankByKey(key){
+  if (!key) return null;
+  const k = String(key).toUpperCase();
+  return ranks().find(r => String(r.key).toUpperCase() === k) || null;
+}
+function rankMult(key){ const r = rankByKey(key); return r && isFinite(r.multiplier) ? Number(r.multiplier) : 1; }
+function rankColor(key){ const r = rankByKey(key); return r ? (r.color || '#C8C8C8') : '#C8C8C8'; }
+function tierList(){
+  const seen = [];
+  ranks().forEach(r => { if (r.tier && seen.indexOf(r.tier) === -1) seen.push(r.tier); });
+  return seen.length ? seen : ['F','D','C','B','A','S','G'];
+}
+function probSum(){
+  return ranks().reduce((s,r)=>s+(Number(r.probability)||0), 0);
+}
+/* 游戏同款 roll：按概率加权、可过滤 minLevel */
+function rollRank(ignoreLevel, playerLv){
+  const list = ranks();
+  if (!list.length) return null;
+  const lv = ignoreLevel ? 999 : (playerLv || 1);
+  const pool = list.filter(r => ignoreLevel || (Number(r.minLevel) || 1) <= lv);
+  const use = pool.length ? pool : list;
+  const total = use.reduce((s,r)=>s+(Number(r.probability)||0), 0) || 1;
+  let x = Math.random() * total;
+  for (const r of use){ x -= (Number(r.probability)||0); if (x <= 0) return r.key; }
+  return use[use.length-1].key;
+}
+function pickWeightedRank(pool){
+  const ws = pool.map(r => { const w=Number(r.weight); if(w>0) return w; const rk=rankByKey(r.key); return rk?(Number(rk.probability)||0):0; });
+  const total = ws.reduce((a,b)=>a+b,0)||1;
+  let x = Math.random()*total;
+  for (let i=0;i<pool.length;i++){ x-=ws[i]; if(x<=0) return pool[i].key; }
+  return pool[pool.length-1].key;
+}
+/* 未定档时：依次对每组独立 roll，首个命中组内按权重抽 1 档；全未命中回退全局 */
+function rollRankWithGroups(p){
+  const gs = (p && p.RollGroups) || [];
+  for (const g of gs){
+    if (Math.random() < (Number(g.chance)||0)){
+      const pool = (g.ranks||[]).filter(r=>rankByKey(r.key));
+      if (pool.length) return pickWeightedRank(pool);
+    }
+  }
+  return rollRank(true,1);
+}
+function normRollGroup(g){
+  if (!g || typeof g !== 'object') return null;
+  let chance = Number(g.chance); if (!isFinite(chance)) chance = 0;
+  chance = Math.max(0, Math.min(1, chance));
+  const rs = Array.isArray(g.ranks) ? g.ranks.map(r => {
+    if (!r || typeof r !== 'object') return null;
+    const key = String(r.key==null?'':r.key).trim(); if (!key) return null;
+    let w = Number(r.weight); if (!isFinite(w)||w<0) w = 1;
+    return {key, weight:w};
+  }).filter(Boolean) : [];
+  return {name:String(g.name==null?'':g.name), chance, ranks:rs};
+}
+
+/* =========================================================
+   数据模型
+   ========================================================= */
+function defaultProps(){
+  return {
+    Name:'', ShortName:'', Price:100,
+    StackMaxSize:5, Width:1, Height:1, Weight:0.1,
+    IsSaleable:true,
+    Rank:'', RollGroups:[], Stats:null, EffectDesc:'',
+    Tags:[], AllowedContainers:['bag','storage','pocket','safe'], IsGem:true
+  };
+}
+function normNum(v,d){ const n = Number(v); return isFinite(n) ? n : d; }
+
+function normalizeProps(src){
+  const d = defaultProps();
+  if (src && typeof src === 'object'){
+    Object.keys(d).forEach(k => { if (src[k] !== undefined && src[k] !== null) d[k] = src[k]; });
+  }
+  d.Name = String(d.Name || '');
+  d.ShortName = String(d.ShortName || '');
+  d.EffectDesc = d.EffectDesc == null ? '' : String(d.EffectDesc);
+  d.Rank = d.Rank || d.rank || '';
+  if (!Array.isArray(d.AllowedContainers)) d.AllowedContainers = d.AllowedContainers ? [d.AllowedContainers] : [];
+  d.AllowedContainers = CONTAINER_OPTIONS.filter(c => d.AllowedContainers.includes(c));
+  if (!d.AllowedContainers.length) d.AllowedContainers = ['bag','storage','pocket','safe'];
+  d.Tags = Array.isArray(d.Tags) ? d.Tags.filter(Boolean).map(String) : [];
+  d.Price = Math.max(0, Math.floor(normNum(d.Price, 100)));
+  d.StackMaxSize = Math.max(1, Math.floor(normNum(d.StackMaxSize, 5)));
+  d.Width = Math.max(1, Math.floor(normNum(d.Width, 1)));
+  d.Height = Math.max(1, Math.floor(normNum(d.Height, 1)));
+  d.Weight = normNum(d.Weight, 0.1);
+  d.IsSaleable = d.IsSaleable !== false;
+  d.IsGem = true;
+  d.RollGroups = (src && Array.isArray(src.RollGroups)) ? src.RollGroups.map(normRollGroup).filter(Boolean) : [];
+
+  const rawStats = (src && (src.Stats || src.BaseStats || src.GemStats)) || null;
+  if (rawStats && typeof rawStats === 'object'){
+    const st = {};
+    Object.keys(rawStats).forEach(k => {
+      const n = Number(rawStats[k]);
+      if (k && isFinite(n) && n !== 0) st[k] = n;
+    });
+    d.Stats = Object.keys(st).length ? st : null;
+  } else d.Stats = null;
+
+  /* 未被识别的字段单独留档，导出前会提示并被丢弃 */
+  d.__dropped = {};
+  if (src && typeof src === 'object'){
+    Object.keys(src).forEach(k => { if (GEM_PROP_KEYS.indexOf(k) === -1 && k !== '__dropped' && k !== 'RollGroups') d.__dropped[k] = src[k]; });
+  }
+  return d;
+}
+
+function normalizeEntry(key, obj){
+  obj = obj || {};
+  const props = obj._props && typeof obj._props === 'object' ? obj._props : obj;
+  const name = obj._name || props.Name || props.name || String(key);
+  const out = {
+    key: String(key),
+    _id: obj._id != null ? String(obj._id) : String(key),
+    _name: String(name),
+    _type: obj._type || '宝石',
+    _debugSample: !!obj._debugSample,
+    _props: normalizeProps(props)
+  };
+  if (!out._props.Name) out._props.Name = out._name;
+  if (!out._props.ShortName) out._props.ShortName = out._props.Name;
+  return out;
+}
+
+function defaultData(){
+  const arr = Object.keys(DEFAULT_GEMS).map(k => normalizeEntry(k, DEFAULT_GEMS[k]));
+  const lucky = arr.find(d => d.key === '900011');
+  if (lucky) lucky._props.RollGroups = [
+    {name:'普通组', chance:0.7, ranks:[{key:'D',weight:1},{key:'C',weight:1}]},
+    {name:'稀有组', chance:0.3, ranks:[{key:'B+',weight:1},{key:'A-',weight:0.5}]}
+  ];
+  return arr;
+}
+
+/* 换算后的实际效果（游戏侧 gemStats 同款） */
+function liveStats(p){
+  const raw = p.Stats || {};
+  const m = rankMult(p.Rank);
+  const out = {};
+  Object.keys(raw).forEach(k => {
+    const v = (Number(raw[k]) || 0) * m;
+    out[k] = Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : +v.toFixed(3);
+  });
+  return out;
+}
+function statsSummary(p){
+  const base = p.Stats || {};
+  const live = liveStats(p);
+  const keys = Object.keys(base);
+  if (!keys.length) return '<span style="color:var(--danger)">无效果</span>';
+  return keys.map(k => k + ' ' + base[k] + ' <span class="dim">→</span> <b style="color:' +
+    (LIVE_STATS.indexOf(k) >= 0 ? 'var(--gain)' : 'var(--warn)') + '">' + live[k] + '</b>').join('、');
+}
+
+/* =========================================================
+   状态
+   ========================================================= */
+let data = [];
+let itemsTable = null;      // 仅用于孔位统计
+let selectedKey = null;
+
+const listBody = document.getElementById('listBody');
+const detail = document.getElementById('detail');
+const stat = document.getElementById('stat');
+const searchInput = document.getElementById('searchInput');
+const fTier = document.getElementById('fTier');
+const fRank = document.getElementById('fRank');
+const fStat = document.getElementById('fStat');
+const fContainer = document.getElementById('fContainer');
+const triStates = [];
+
+function esc(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){} }
+function saveTags(){ try{ localStorage.setItem(LS_TAGS, JSON.stringify(tagTable)); }catch(e){} }
+function currentItem(){ return data.find(d => d.key === selectedKey) || null; }
+
+/* =========================================================
+   校验（对齐游戏 validateGemTable + 结算真实读取）
+   ========================================================= */
+function issuesOf(item){
+  const out = [];
+  const p = item._props;
+  const id = String(item._id || '').trim();
+  if (!/^\d{6}$/.test(id)) out.push(['e','_id 建议为 6 位数字（当前：' + (id || '空') + '）']);
+  if (String(item.key).trim() === '') out.push(['e','Key 不能为空']);
+  if (!p.Name) out.push(['e','Name 为空，游戏里会显示成 id']);
+  if (item._type !== '宝石') out.push(['e','_type=' + item._type + '，非「宝石」的条目不会被当成宝石镶嵌']);
+  if (!p.Rank){
+    out.push(['w','未定档：镶嵌时由游戏随机 roll 档位，效果倍率不确定']);
+  } else if (!rankByKey(p.Rank)){
+    out.push(['e','Rank "' + p.Rank + '" 不在档位表中，游戏按 ×1 计算（导入 Eq_tags.json 或改档位）']);
+  }
+  const keys = Object.keys(p.Stats || {});
+  if (!keys.length) out.push(['e','Stats 为空：这颗宝石镶上没有任何效果']);
+  const dead = keys.filter(k => LIVE_STATS.indexOf(k) < 0);
+  if (dead.length) out.push(['w','这些属性游戏不读取：' + dead.join('/') + '（生效仅限 ' + LIVE_STATS.join('/') + '）']);
+  if (!isFinite(p.Price) || p.Price < 0) out.push(['e','Price 非法']);
+  if (!(p.Width >= 1) || !(p.Height >= 1)) out.push(['e','Width / Height 必须 ≥ 1']);
+  if (!(p.StackMaxSize >= 1)) out.push(['e','StackMaxSize 必须 ≥ 1']);
+  if (p.AllowedContainers.indexOf('hotbar') >= 0) out.push(['w','含 hotbar：宝石不可使用，放快捷栏只能占位']);
+  if (!p.AllowedContainers.length) out.push(['e','AllowedContainers 为空，物品无处可放']);
+  if (!p.EffectDesc) out.push(['w','EffectDesc 为空：菜单里只有数值，没有描述文案']);
+  (p.RollGroups||[]).forEach((g,gi)=>{
+    if (!(g.chance>=0 && g.chance<=1)) out.push(['e','Roll组'+(gi+1)+' 概率超出 0~100%']);
+    if (!g.ranks.length) out.push(['w','Roll组'+(gi+1)+' 为空（不会命中）']);
+    g.ranks.forEach(r=>{ if (!rankByKey(r.key)) out.push(['e','Roll组'+(gi+1)+' 引用未知档位 '+r.key]); });
+  });
+  if ((p.RollGroups||[]).length) out.push(['w','RollGroups 随导出携带；当前游戏 roll 仍用全局 Eq_tags，需游戏侧支持后生效']);
+  const dropped = Object.keys(p.__dropped || {});
+  if (dropped.length) out.push(['w','导出将丢弃未识别字段：' + dropped.join('/')]);
+  return out;
+}
+function allIssues(){
+  const list = [];
+  const seenId = {}, seenKey = {};
+  data.forEach(d => {
+    if (seenId[d._id]) list.push({key:d._id, level:'e', msg:'_id 与 ' + seenId[d._id] + ' 重复：' + d._id, item:d.key});
+    else seenId[d._id] = d.key;
+    if (seenKey[d.key]) list.push({key:d.key, level:'e', msg:'Key 重复：' + d.key, item:d.key});
+    else seenKey[d.key] = 1;
+    issuesOf(d).forEach(([lv,msg]) => list.push({key:d.key, level:lv, msg:(d._props.Name || d.key) + ' · ' + msg, item:d.key}));
+  });
+  const sum = probSum(), tol = Number(tagTable && tagTable.probabilitySumTolerance) || 0.001;
+  if (ranks().length && Math.abs(sum - 1) > tol)
+    list.push({key:'__tags', level:'e', msg:'档位概率合计 ' + sum.toFixed(5) + '，超出容差 ' + tol, item:null});
+  return list;
+}
+const issueCache = { get(){ return this._c || (this._c = allIssues()); }, dirty(){ this._c = null; } };
+function issuesOfKey(k){ return issueCache.get().filter(x => x.item === k); }
+
+/* =========================================================
+   筛选
+   ========================================================= */
+function fillFilters(){
+  fTier.innerHTML = '<option value="">全部 Tier</option>' + tierList().map(v => '<option>' + esc(v) + '</option>').join('');
+  fRank.innerHTML = '<option value="">全部档位</option>' + ranks().map(r => '<option value="' + esc(r.key) + '">' + esc(r.key) + ' ×' + esc(r.multiplier) + '</option>').join('');
+  fStat.innerHTML = '<option value="">全部属性</option>' + STAT_KEYS.map(v => '<option>' + esc(v) + '</option>').join('');
+  fContainer.innerHTML = '<option value="">全部容器</option>' + CONTAINER_OPTIONS.map(v => '<option value="' + esc(v) + '">' + esc(CONTAINER_LABEL[v]) + '</option>').join('');
+}
+function visibleRows(){
+  const q = searchInput.value.trim().toLowerCase();
+  return data.filter(d => {
+    const p = d._props;
+    if (q){
+      const hay = [d.key,d._id,d._name,p.Name,p.ShortName,p.EffectDesc,(p.Tags||[]).join(' '),Object.keys(p.Stats||{}).join(' ')].join(' ').toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    if (fTier.value){ const r = rankByKey(p.Rank); if (!r || r.tier !== fTier.value) return false; }
+    if (fRank.value && String(p.Rank).toUpperCase() !== String(fRank.value).toUpperCase()) return false;
+    if (fStat.value && !((p.Stats||{})[fStat.value] !== undefined)) return false;
+    if (fContainer.value && !(p.AllowedContainers||[]).includes(fContainer.value)) return false;
+    for (const t of triStates){
+      if (t.state === 'all') continue;
+      let v;
+      if (t.key === '__issue') v = issuesOfKey(d.key).some(x => x.level === 'e');
+      else if (t.key === 'EffectDesc') v = !!(p.EffectDesc || '').trim();
+      else v = t.key === 'Rank' ? !!p.Rank : !!p[t.key];
+      if (t.state === 'on' && !v) return false;
+      if (t.state === 'off' && v) return false;
+    }
+    return true;
+  });
+}
+
+/* =========================================================
+   列表
+   ========================================================= */
+function renderList(){
+  issueCache.dirty();
+  const rows = visibleRows();
+  listBody.innerHTML = rows.map(d => {
+    const p = d._props;
+    const color = p.Rank && rankByKey(p.Rank) ? rankColor(p.Rank) : '#8A8A8A';
+    const conts = (p.AllowedContainers||[]).map(c => CONTAINER_LABEL[c]||c).join('/');
+    const iss = issuesOfKey(d.key);
+    const bad = iss.some(x => x.level === 'e'), warn = !bad && iss.length;
+    return '<tr data-key="' + esc(d.key) + '" draggable="true" class="' + (d.key===selectedKey?'selected':'') + '">'
+      + '<td class="drag">⠿</td>'
+      + '<td class="dim">' + esc(d.key) + '</td>'
+      + '<td class="dim">' + esc(d._id) + '</td>'
+      + '<td style="color:' + color + '">' + esc(p.Name || d._name || '') + '</td>'
+      + '<td style="color:' + color + '">' + esc(p.Rank || '—') + '</td>'
+      + '<td>' + statsSummary(p) + '</td>'
+      + '<td class="num">' + p.Price + '</td>'
+      + '<td class="num">' + p.StackMaxSize + '</td>'
+      + '<td class="dim">' + p.Width + '×' + p.Height + '</td>'
+      + '<td class="dim">' + esc(conts) + '</td>'
+      + '<td>' + (bad ? '<span class="pill err">错误</span>' : warn ? '<span class="pill warn">提醒</span>' : '<span class="pill ok">OK</span>') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  const iss = issueCache.get();
+  const errs = iss.filter(x => x.level === 'e').length;
+  const gemNo = new Set(data.map(d => d._id)).size;
+  stat.innerHTML = '共 ' + data.length + ' 颗'
+    + (rows.length !== data.length ? ' / 显示 ' + rows.length : '')
+    + ' · 唯一 id ' + gemNo
+    + ' · 概率合计 ' + probSum().toFixed(4)
+    + (errs ? ' · <b class="err">错误 ' + errs + '</b>' : ' · <b class="ok">校验通过</b>');
+}
+
+/* =========================================================
+   拖拽排序
+   ========================================================= */
+let dragKey = null, dropTarget = null;
+function clearDropMarkers(){ listBody.querySelectorAll('.drop-before,.drop-after').forEach(el => el.classList.remove('drop-before','drop-after')); }
+function moveItem(srcKey, tgtKey, after){
+  const si = data.findIndex(d => d.key === srcKey);
+  if (si < 0) return;
+  const item = data.splice(si,1)[0];
+  let ti = data.findIndex(d => d.key === tgtKey);
+  if (ti < 0){ data.splice(si,0,item); return; }
+  if (after) ti += 1;
+  data.splice(ti,0,item);
+  save(); renderList();
+}
+listBody.addEventListener('dragstart', e => {
+  const tr = e.target.closest('tr'); if (!tr) return;
+  dragKey = tr.dataset.key; tr.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try{ e.dataTransfer.setData('text/plain', dragKey); }catch(_){}
+});
+listBody.addEventListener('dragover', e => {
+  if (!dragKey) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr');
+  clearDropMarkers();
+  if (!tr || tr.dataset.key === dragKey){ dropTarget = null; return; }
+  const r = tr.getBoundingClientRect();
+  const after = (e.clientY - r.top) > r.height/2;
+  tr.classList.add(after ? 'drop-after' : 'drop-before');
+  dropTarget = {key:tr.dataset.key, after};
+});
+listBody.addEventListener('drop', e => {
+  if (!dragKey || !dropTarget) return;
+  e.preventDefault();
+  const s = dragKey, t = dropTarget;
+  dragKey = null; dropTarget = null; clearDropMarkers();
+  moveItem(s, t.key, t.after);
+});
+listBody.addEventListener('dragend', () => {
+  dragKey = null; dropTarget = null; clearDropMarkers();
+  listBody.querySelectorAll('tr.dragging').forEach(el => el.classList.remove('dragging'));
+});
+
+/* =========================================================
+   表单片段
+   ========================================================= */
+function field(label, attr, val, opt){
+  opt = opt || {};
+  let ctrl;
+  if (opt.kind === 'select'){
+    const list = opt.list || [];
+    let h = '<option value=""' + (val ? '' : ' selected') + '>（' + (opt.ph || '空') + '）</option>';
+    h += list.map(o => '<option value="' + esc(o.v !== undefined ? o.v : o) + '"'
+      + (String(o.v !== undefined ? o.v : o) === String(val) ? ' selected' : '') + '>' + esc(o.t !== undefined ? o.t : o) + '</option>').join('');
+    ctrl = '<select ' + attr + '>' + h + '</select>';
+  } else if (opt.kind === 'textarea'){
+    ctrl = '<textarea ' + attr + ' rows="3">' + esc(val) + '</textarea>';
+  } else if (opt.kind === 'number'){
+    ctrl = '<input type="number" step="' + (opt.step || 'any') + '" ' + attr + ' value="' + (val === null || val === undefined ? '' : val) + '">';
+  } else {
+    ctrl = '<input type="text" ' + attr + ' value="' + esc(val) + '">';
+  }
+  return '<div class="field"><label>' + label + '</label>' + ctrl
+    + (opt.note ? '<div class="tagline">' + opt.note + '</div>' : '') + '</div>';
+}
+function boolHTML(attr, label, val, note){
+  return '<label class="bool-item"><span>' + label + '</span><input type="checkbox" ' + attr + ' ' + (val?'checked':'') + '><span class="track"></span></label>'
+    + (note ? '<div class="tagline">' + note + '</div>' : '');
+}
+function rankOptions(){
+  const out = [];
+  tierList().forEach(t => ranks().filter(r => r.tier === t).forEach(r =>
+    out.push({v:r.key, t:r.key + ' ×' + r.multiplier + ' · Lv' + (r.minLevel||1)})));
+  return out;
+}
+
+function rankSelectOptions(cur){
+  let h = '<option value="">（选择档位）</option>';
+  ranks().forEach(r => { h += '<option value="'+esc(r.key)+'"'+(r.key===cur?' selected':'')+'>'+esc(r.key)+' ×'+r.multiplier+'</option>'; });
+  if (cur && !rankByKey(cur)) h += '<option value="'+esc(cur)+'" selected>'+esc(cur)+'（未知）</option>';
+  return h;
+}
+function renderRollGroups(p){
+  const gs = p.RollGroups || [];
+  let h = '<div class="section-title">Roll 组 RollGroups <span class="r">未定档时按组 roll · 概率精确到 0.000%</span></div>';
+  h += '<div class="tagline" style="margin-bottom:6px">依次对每组独立 roll，首个命中的组内按权重抽 1 个档位；全未命中回退全局 Eq_tags 概率。固定 Rank 优先于 Roll 组。</div>';
+  if (!gs.length) h += '<div class="empty" style="padding:6px 2px">暂无 Roll 组。点击「＋ 添加 Roll 组」。</div>';
+  gs.forEach((g, gi) => {
+    h += '<div class="rg-card"><div class="rg-head">'
+      + '<input type="text" data-rgname data-gidx="'+gi+'" value="'+esc(g.name)+'" placeholder="组名（可选）">'
+      + '<label class="rg-prob">概率% <input type="number" data-rgchance data-gidx="'+gi+'" value="'+(g.chance*100).toFixed(3)+'" min="0" max="100" step="0.001"></label>'
+      + '<button type="button" class="mini" data-fill-rg="'+gi+'">按 Eq_tags 概率设权重</button>'
+      + '<button type="button" class="del" data-del-rg="'+gi+'">删组</button></div>';
+    if (!g.ranks.length){ h += '<div class="empty" style="padding:4px 2px">组内暂无档位。</div>'; }
+    else {
+      h += '<table class="rg-table"><thead><tr><th style="width:40%">档位</th><th style="width:20%">倍率</th><th style="width:28%">权重</th><th style="width:12%"></th></tr></thead><tbody>';
+      g.ranks.forEach((r, ri) => {
+        const rk = rankByKey(r.key);
+        h += '<tr><td><select data-rgkey data-gidx="'+gi+'" data-ridx="'+ri+'">'+rankSelectOptions(r.key)+'</select></td>'
+          + '<td class="dim">'+(rk?'×'+rk.multiplier:'—')+'</td>'
+          + '<td><input type="number" data-rgweight data-gidx="'+gi+'" data-ridx="'+ri+'" value="'+r.weight+'" min="0" step="0.001"></td>'
+          + '<td><button type="button" class="del" data-del-rr data-gidx="'+gi+'" data-ridx="'+ri+'">删</button></td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    h += '<div class="actions"><button type="button" class="mini" data-add-rr="'+gi+'">＋ 组内添加档位</button></div></div>';
+  });
+  h += '<div class="actions"><button type="button" class="mini" id="addRgBtn">＋ 添加 Roll 组</button>'
+    + '<button type="button" class="mini" id="tryRollBtn">试 roll 10 次</button><span class="tagline" id="rollOut"></span></div>';
+  return h;
+}
+
+/* =========================================================
+   详情渲染
+   ========================================================= */
+function renderDetail(){
+  const item = currentItem();
+  if (!item){ detail.innerHTML = '<p class="hint">← 从左侧选择一颗宝石开始编辑</p>'; return; }
+  const p = item._props;
+  const rk = rankByKey(p.Rank);
+  const mult = rk ? Number(rk.multiplier) : 1;
+  let h = '';
+
+  /* 校验摘要 */
+  const iss = issuesOfKey(item.key);
+  if (iss.length){
+    h += '<div class="note' + (iss.some(x=>x.level==='e') ? ' bad' : '') + '">'
+      + iss.map(x => (x.level === 'e' ? '✗ ' : '! ') + esc(x.msg)).join('<br>') + '</div>';
+  }
+
+  /* 基本信息 */
+  h += '<div class="section-title">基本信息</div>';
+  h += '<div class="grid2">'
+    + field('Key（对象键）', 'data-root="key"', item.key, {note:'gem.json 里 gems 下的键名，通常与 _id 一致'})
+    + field('_id（标识）', 'data-root="_id"', item._id, {note:'建议 6 位数字，且不与 items.json 冲突（示例用 9xxxxx 段）'})
+    + '</div>';
+  h += '<div class="grid2">'
+    + field('_name（表内名称）', 'data-root="_name"', item._name)
+    + field('_type（类型）', 'data-root="_type"', item._type, {kind:'select', list:TYPE_OPTIONS, ph:'宝石', note:'必须是「宝石」才会被识别为可镶嵌物'})
+    + '</div>';
+  h += boolHTML('data-root="_debugSample"', '_debugSample（调试样例标记）', item._debugSample, '该字段不会被游戏保留');
+
+  /* 名称 */
+  h += '<div class="section-title">名称（游戏显示）</div>';
+  h += '<div class="grid2">'
+    + field('Name（全名）', 'data-prop="Name"', p.Name, {note:'菜单与掉落日志使用'})
+    + field('ShortName（短名）', 'data-prop="ShortName"', p.ShortName, {note:'格子太小时的显示名'})
+    + '</div>';
+
+  /* 档位 */
+  h += '<div class="section-title">档位 Rank（倍率来自 Eq_tags.json）</div>';
+  h += '<div class="row-flex">'
+    + field('Rank（档位 key）', 'data-prop="Rank"', p.Rank, {kind:'select', list:rankOptions(), ph:'未定档（镶嵌时随机 roll）'})
+    + '<div style="flex:none;padding-bottom:9px"><button id="rollBtn">随机定档</button></div>'
+    + '</div>';
+  if (!ranks().length){
+    h += '<div class="note bad">当前没有档位表，Rank 无法换算倍率。点顶部「导入档位表」载入 Eq_tags.json。</div>';
+  } else {
+    h += '<div class="statgrid">'
+      + '<div class="statbox"><div class="k">倍率</div><div class="v">×' + mult + '</div></div>'
+      + '<div class="statbox"><div class="k">Tier / 颜色</div><div class="v" style="color:' + rankColor(p.Rank) + '">' + esc(rk ? rk.tier : '—') + '</div></div>'
+      + '<div class="statbox"><div class="k">最低等级</div><div class="v">' + esc(rk ? (rk.minLevel ?? 1) : '—') + '</div></div>'
+      + '</div>';
+    const sum = probSum(), tol = Number(tagTable && tagTable.probabilitySumTolerance) || 0.001;
+    h += '<div class="bar"><i style="width:' + Math.min(100, sum*100) + '%"></i></div>'
+      + '<div class="tagline">档位概率合计 ' + sum.toFixed(5) + '（容差 ' + tol + '）· 档位共 ' + ranks().length + ' 级</div>';
+  }
+  h += renderRollGroups(p);
+
+  /* 效果 */
+  h += '<div class="section-title">Stats（宝石效果 · 基础值 ×倍率 = 实际）</div>';
+  h += '<div class="grid3">';
+  STAT_KEYS.forEach(k => {
+    const base = p.Stats && p.Stats[k] !== undefined ? p.Stats[k] : '';
+    const live = base === '' ? '' : (Math.abs(Number(base)*mult - Math.round(Number(base)*mult)) < 1e-9
+      ? Math.round(Number(base)*mult) : +(Number(base)*mult).toFixed(3));
+    const warn = base !== '' && LIVE_STATS.indexOf(k) < 0;
+    h += '<div class="field"><label>' + STAT_LABEL[k] + (warn ? ' <span class="pill warn">不生效</span>' : '') + '</label>'
+      + '<input type="number" step="any" data-stat="' + k + '" value="' + base + '">'
+      + '<div class="tagline">' + (base === '' ? '—' : '实际 ' + live) + '</div></div>';
+  });
+  h += '</div>';
+  h += '<div class="note">游戏结算只读取 ' + LIVE_STATS.join(' / ') + '；CRT、T_CRT、Cont、GP 写进 Stats 不会改变面板数值。</div>';
+
+  /* 说明文案 */
+  h += '<div class="section-title">EffectDesc（菜单里的效果描述）</div>';
+  h += field('EffectDesc', 'data-prop="EffectDesc"', p.EffectDesc, {kind:'textarea', note:'留空则菜单只有数值行，没有这句描述'});
+  h += '<div class="actions"><button id="genDesc">按当前档位自动生成</button><button id="genDescAll">批量生成全部空缺</button></div>';
+
+  /* 规格与价格 */
+  h += '<div class="section-title">规格 · 价格</div>';
+  h += '<div class="grid3">'
+    + field('Price（铜币）', 'data-prop="Price"', p.Price, {kind:'number', step:'1', note:'宝石按原价计价，档位倍率不作用于价格'})
+    + field('StackMaxSize（堆叠）', 'data-prop="StackMaxSize"', p.StackMaxSize, {kind:'number', step:'1'})
+    + field('Weight（重量）', 'data-prop="Weight"', p.Weight, {kind:'number', note:'当前版本无负重结算，仅作标记'})
+    + field('Width（宽）', 'data-prop="Width"', p.Width, {kind:'number', step:'1', note:'宝石建议 1×1'})
+    + field('Height（高）', 'data-prop="Height"', p.Height, {kind:'number', step:'1'})
+    + field('IsSaleable（可出售）', 'data-saleable="1"', p.IsSaleable ? '1' : '0',
+        {kind:'select', list:[{v:'1',t:'是（可卖给商人）'},{v:'0',t:'否（锁定不卖）'}], note:'宝石一般保持可出售'})
+    + '</div>';
+
+  h += '<div class="section-title">AllowedContainers（可存放位置）</div>';
+  h += '<div class="chk-grid">';
+  CONTAINER_OPTIONS.forEach(c => {
+    const on = (p.AllowedContainers||[]).includes(c);
+    h += '<label class="chk"><input type="checkbox" data-cont="' + c + '" ' + (on?'checked':'') + '> ' + CONTAINER_LABEL[c] + '</label>';
+  });
+  h += '</div>';
+  h += '<div class="section-title">Tags（标签）</div>';
+  h += field('Tags（逗号分隔，供搜索/归类）', 'data-tags="1"', (p.Tags||[]).join(', '));
+
+  /* 孔位需求参考 */
+  if (itemsTable){
+    const eqs = Object.values(itemsTable).filter(d => d && d._props && Number(d._props.GemSlots) > 0);
+    const holes = eqs.reduce((s,d) => s + Number(d._props.GemSlots), 0);
+    h += '<div class="section-title">items.json 参考</div>';
+    h += '<div class="tagline">带孔位装备 ' + eqs.length + ' 件 · 合计需 ' + holes + ' 颗宝石 · 当前宝石种类 ' + data.length + '</div>';
+  }
+
+  /* 游戏实际收到的内容 */
+  h += '<div class="section-title">导出预览（游戏真正读到的 _props）</div>';
+  h += '<pre class="preview" id="preview"></pre>';
+
+  detail.innerHTML = h;
+
+  /* 只读预览用 textContent 注入，避免任何转义问题 */
+  const pv = detail.querySelector('#preview');
+  if (pv) pv.textContent = JSON.stringify(buildEntryForExport(item), null, 2);
+
+  const rb = detail.querySelector('#rollBtn');
+  if (rb) rb.onclick = () => {
+    const k = rollRankWithGroups(item._props);
+    if (!k){ alert('没有档位表'); return; }
+    item._props.Rank = k;
+    save(); issueCache.dirty(); renderList(); renderDetail();
+  };
+  const gd = detail.querySelector('#genDesc');
+  if (gd) gd.onclick = () => { item._props.EffectDesc = buildDesc(item); save(); issueCache.dirty(); renderList(); renderDetail(); };
+  const gda = detail.querySelector('#genDescAll');
+  if (gda) gda.onclick = () => {
+    let n = 0;
+    data.forEach(d => { if (!(d._props.EffectDesc || '').trim()){ d._props.EffectDesc = buildDesc(d); n++; } });
+    save(); renderList(); renderDetail();
+    alert('已生成 ' + n + ' 条效果描述');
+  };
+  renderIssuePanel();
+}
+
+function buildDesc(item){
+  const p = item._props;
+  const live = liveStats(p);
+  const keys = Object.keys(live);
+  if (!keys.length) return p.Name + '：无属性加成';
+  const CN = {STR:'力量',DEF:'防御',MGA:'魔攻',MGD:'魔防',HP:'生命上限',MP:'法力上限',SPD:'速度',LUK:'幸运'};
+  const parts = keys.map(k => (CN[k] || k) + ' +' + live[k]);
+  const rk = rankByKey(p.Rank);
+  return p.Name + '：' + parts.join('、') + (rk ? '（基础 ×' + rk.key + ' 倍率 ' + rk.multiplier + '）' : '（未定档）');
+}
+
+/* =========================================================
+   编辑事件
+   ========================================================= */
+function onEdit(e){
+  const el = e.target, item = currentItem();
+  if (!item) return;
+  const p = item._props;
+
+  if (el.dataset.root){
+    const k = el.dataset.root;
+    if (k === 'key'){
+      if (e.type !== 'change') return;
+      const nv = String(el.value).trim();
+      if (!nv){ el.value = item.key; return; }
+      if (nv === item.key) return;
+      if (data.some(d => d !== item && d.key === nv)){ alert('Key 已存在：' + nv); el.value = item.key; return; }
+      item.key = nv; selectedKey = nv;
+      issueCache.dirty(); renderList(); renderDetail(); save(); return;
+    }
+    if (k === '_debugSample') item._debugSample = el.checked;
+    else item[k] = el.value;
+    issueCache.dirty(); renderList(); save(); return;
+  }
+
+  if (el.dataset.prop){
+    const k = el.dataset.prop;
+    if (el.type === 'checkbox') p[k] = el.checked;
+    else if (el.type === 'number'){
+      if (el.value === '') p[k] = 0;
+      else { const n = Number(el.value); if (!isNaN(n)) p[k] = n; }
+    } else {
+      p[k] = el.value === '' ? '' : el.value;
+    }
+    issueCache.dirty(); renderList(); save();
+    if (k === 'Rank' || k === 'Name') renderDetail();
+    return;
+  }
+
+  if (el.dataset.saleable){
+    p.IsSaleable = el.value === '1';
+    issueCache.dirty(); renderList(); save(); return;
+  }
+
+  if (el.dataset.stat){
+    const k = el.dataset.stat;
+    if (!p.Stats) p.Stats = {};
+    if (el.value === '') delete p.Stats[k];
+    else {
+      const n = Number(el.value);
+      if (!isNaN(n)){ if (n === 0) delete p.Stats[k]; else p.Stats[k] = n; }
+    }
+    if (Object.keys(p.Stats).length === 0) p.Stats = null;
+    issueCache.dirty(); renderList(); save();
+    /* 刷新「实际」小字，避免整表重建打断输入 */
+    const live = liveStats(p);
+    detail.querySelectorAll('[data-stat]').forEach(inp => {
+      const kk = inp.dataset.stat, b = (p.Stats||{})[kk];
+      const lab = inp.parentElement.querySelector('.tagline');
+      if (lab) lab.textContent = (b === undefined) ? '—' : '实际 ' + live[kk];
+    });
+    return;
+  }
+
+  if (el.dataset.cont){
+    const c = el.dataset.cont;
+    let arr = Array.isArray(p.AllowedContainers) ? p.AllowedContainers.slice() : [];
+    if (el.checked){ if (arr.indexOf(c) < 0) arr.push(c); }
+    else arr = arr.filter(x => x !== c);
+    p.AllowedContainers = CONTAINER_OPTIONS.filter(x => arr.indexOf(x) >= 0);
+    if (!p.AllowedContainers.length) p.AllowedContainers = ['bag','storage','pocket','safe'];
+    issueCache.dirty(); renderList(); save(); return;
+  }
+
+  if (el.dataset.tags){
+    p.Tags = String(el.value).split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+    save(); return;
+  }
+}
+detail.addEventListener('input', onEdit);
+detail.addEventListener('change', onEdit);
+detail.addEventListener('input', onRgEdit);
+detail.addEventListener('change', onRgEdit);
+detail.addEventListener('click', onRgClick);
+
+listBody.addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  if (tr.dataset.key === selectedKey) return;
+  selectedKey = tr.dataset.key;
+  renderList(); renderDetail();
+});
+
+/* =========================================================
+   Roll 组编辑
+   ========================================================= */
+function onRgEdit(e){
+  const el = e.target, item = currentItem(); if (!item) return;
+  if (el.dataset.gidx === undefined) return;
+  const p = item._props;
+  const gi = Number(el.dataset.gidx);
+  const g = (p.RollGroups||[])[gi]; if (!g) return;
+  if (el.dataset.rgname !== undefined){ g.name = el.value; save(); return; }
+  if (el.dataset.rgchance !== undefined){
+    let v = el.value === '' ? 0 : Number(el.value); if (!isFinite(v)) v = 0;
+    v = Math.max(0, Math.min(100, v)); v = Math.round(v*1000)/1000;
+    g.chance = v/100; save(); issueCache.dirty(); renderList(); return;
+  }
+  const ri = Number(el.dataset.ridx);
+  const r = g.ranks[ri]; if (!r) return;
+  if (el.dataset.rgkey !== undefined){ r.key = el.value; save(); issueCache.dirty(); renderList(); renderDetail(); return; }
+  if (el.dataset.rgweight !== undefined){ let v = el.value === '' ? 0 : Number(el.value); if (!isFinite(v)) v = 0; r.weight = Math.max(0, v); save(); return; }
+}
+function onRgClick(e){
+  const item = currentItem(); if (!item) return;
+  const p = item._props;
+  if (!p.RollGroups) p.RollGroups = [];
+  if (e.target.closest('#addRgBtn')){ p.RollGroups.push({name:'', chance:0.5, ranks:[{key:(ranks()[0]||{}).key||'', weight:1}]}); save(); issueCache.dirty(); renderList(); renderDetail(); return; }
+  const dg = e.target.closest('[data-del-rg]'); if (dg){ p.RollGroups.splice(Number(dg.dataset.delRg),1); save(); issueCache.dirty(); renderList(); renderDetail(); return; }
+  const ar = e.target.closest('[data-add-rr]'); if (ar){ const g=p.RollGroups[Number(ar.dataset.addRr)]; if(g){ g.ranks.push({key:(ranks()[0]||{}).key||'', weight:1}); save(); renderDetail(); } return; }
+  const dr = e.target.closest('[data-del-rr]'); if (dr){ const g=p.RollGroups[Number(dr.dataset.gidx)]; if(g){ g.ranks.splice(Number(dr.dataset.ridx),1); save(); issueCache.dirty(); renderList(); renderDetail(); } return; }
+  const fg = e.target.closest('[data-fill-rg]'); if (fg){ const g=p.RollGroups[Number(fg.dataset.fillRg)]; if(g){ g.ranks.forEach(r=>{ const rk=rankByKey(r.key); r.weight = rk?(Number(rk.probability)||1):1; }); save(); renderDetail(); } return; }
+  if (e.target.closest('#tryRollBtn')){
+    const cnt = {};
+    for (let i=0;i<10;i++){ const k = rollRankWithGroups(p) || '—'; cnt[k]=(cnt[k]||0)+1; }
+    const out = document.getElementById('rollOut');
+    if (out) out.textContent = Object.keys(cnt).map(k=>k+'×'+cnt[k]).join('  ');
+    return;
+  }
+}
+
+/* =========================================================
+   新增 / 复制 / 删除
+   ========================================================= */
+function nextKey(){
+  let max = 900000;
+  data.forEach(d => { const n = Number(d.key); if (isFinite(n) && n > max) max = n; });
+  return String(max + 1);
+}
+function nextId(){
+  let max = 900000;
+  data.forEach(d => { if (/^\d+$/.test(d._id)) max = Math.max(max, parseInt(d._id,10)); });
+  return String(max + 1);
+}
+document.getElementById('addBtn').onclick = () => {
+  const key = nextKey();
+  const it = normalizeEntry(key, {
+    _id: nextId(), _name:'新宝石', _type:'宝石',
+    _props:{Name:'新宝石', ShortName:'新宝石', Price:200, StackMaxSize:5, Width:1, Height:1, Weight:0.1,
+      IsSaleable:true, Rank:'', Stats:{STR:5},
+      AllowedContainers:['bag','storage','pocket','safe'], IsGem:true}
+  });
+  data.push(it); selectedKey = it.key;
+  issueCache.dirty(); renderList(); renderDetail(); save();
+};
+document.getElementById('dupBtn').onclick = () => {
+  const src = currentItem(); if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.key = nextKey(); copy._id = nextId();
+  copy._name = (copy._name || '') + '_副本';
+  copy._props.Name = (copy._props.Name || '') + ' 副本';
+  data.push(copy); selectedKey = copy.key;
+  issueCache.dirty(); renderList(); renderDetail(); save();
+};
+document.getElementById('delBtn').onclick = () => {
+  if (!selectedKey) return;
+  if (!confirm('确认删除 ' + selectedKey + ' ?')) return;
+  const idx = data.findIndex(d => d.key === selectedKey);
+  if (idx < 0) return;
+  data.splice(idx,1);
+  selectedKey = data.length ? data[Math.min(idx, data.length-1)].key : null;
+  issueCache.dirty(); renderList(); renderDetail(); save();
+};
+
+/* =========================================================
+   导入（gem.json / 档位表 / items.json）
+   ========================================================= */
+document.getElementById('importBtn').onclick = () => document.getElementById('importInput').click();
+document.getElementById('tagsInput').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try{
+      const o = JSON.parse(ev.target.result);
+      const list = Array.isArray(o) ? o : o.ranks;
+      if (!Array.isArray(list) || !list.length) throw new Error('没找到 ranks 数组');
+      tagTable = {version:o.version || 1, probabilitySumTolerance:o.probabilitySumTolerance || 0.0001, ranks:list};
+      saveTags(); fillFilters(); issueCache.dirty(); renderList(); renderDetail();
+    }catch(err){ alert('档位表导入失败：' + err.message); }
+  };
+  rd.readAsText(f); e.target.value = '';
+};
+document.getElementById('importItemsBtn').onclick = () => document.getElementById('itemsInput').click();
+document.getElementById('itemsInput').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try{
+      const o = JSON.parse(ev.target.result);
+      itemsTable = o.items && typeof o.items === 'object' ? o.items : o;
+      renderDetail();
+    }catch(err){ alert('items.json 导入失败：' + err.message); }
+  };
+  rd.readAsText(f); e.target.value = '';
+};
+document.getElementById('importInput').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try{
+      const obj = JSON.parse(ev.target.result);
+      let src = obj;
+      if (obj && typeof obj === 'object' && !Array.isArray(obj) && (obj.gems || obj.items || obj.data)) src = obj.gems || obj.items || obj.data;
+      if (Array.isArray(src)) data = src.map((x,i) => normalizeEntry(x && x.key != null ? x.key : (x && x._id) || String(i), x));
+      else if (src && typeof src === 'object') data = Object.keys(src).map(k => normalizeEntry(k, src[k]));
+      else throw new Error('根节点必须是对象或数组');
+      if (!data.length) throw new Error('文件里没有宝石条目');
+      selectedKey = data[0].key;
+      issueCache.dirty(); renderList(); renderDetail(); save();
+    }catch(err){ alert('导入失败：' + err.message); }
+  };
+  rd.readAsText(f); e.target.value = '';
+};
+
+/* =========================================================
+   导出 gem.json（与游戏 importGems 完全对齐）
+   ========================================================= */
+function buildPropsForExport(p){
+  const out = {};
+  PROPS_ORDER.forEach(k => {
+    const v = p[k];
+    if (v === undefined || v === null) return;
+    if (k === 'Stats' && (!v || !Object.keys(v).length)) return;
+    if (k === 'Tags' && (!v || !v.length)) return;
+    if (k === 'EffectDesc' && !String(v).trim()) return;
+    if (k === 'Rank' && !String(v).trim()) return;
+    if (k === 'ShortName' && !String(v).trim()) return;
+    if (k === 'RollGroups'){
+      if (!v || !v.length) return;
+      out[k] = v.map(g => ({name:g.name||'', chance:Number(g.chance.toFixed(6)),
+        ranks:(g.ranks||[]).map(r => ({key:r.key, weight:Number(r.weight)}))}));
+      return;
+    }
+    out[k] = v;
+  });
+  out.IsGem = true;
+  return out;
+}
+function buildEntryForExport(d){
+  const e = { _id: d._id, _name: d._name || d._props.Name, _type: d._type || '宝石' };
+  if (d._debugSample) e._debugSample = true;
+  e._props = buildPropsForExport(d._props);
+  return e;
+}
+function indentBlock(str, level){
+  const pad = '  '.repeat(level);
+  return str.split('\n').map((l,i) => i === 0 ? l : pad + l).join('\n');
+}
+function buildJSONText(){
+  const parts = data.map(d => '    ' + JSON.stringify(d.key) + ': ' + indentBlock(JSON.stringify(buildEntryForExport(d), null, 2), 2));
+  return '{\n  "version": 1,\n  "gems": {\n' + parts.join(',\n') + '\n  }\n}\n';
+}
+document.getElementById('exportBtn').onclick = () => {
+  const errs = issueCache.get().filter(x => x.level === 'e');
+  if (errs.length && !confirm('存在 ' + errs.length + ' 个错误，仍要导出吗？')) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buildJSONText()], {type:'application/json'}));
+  a.download = GEM_FILE;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* =========================================================
+   校验面板（顶部统计条点击展开）
+   ========================================================= */
+function renderIssuePanel(){
+  const box = document.createElement('div');
+  box.id = 'issueBox';
+  const list = issueCache.get();
+  box.className = 'section-title';
+  box.textContent = '全表校验（错误 ' + list.filter(x=>x.level==='e').length + ' · 提醒 ' + list.filter(x=>x.level==='w').length + '）';
+  const wrap = document.createElement('div');
+  wrap.className = 'issues';
+  if (!list.length){
+    const d = document.createElement('div');
+    d.className = 'it';
+    d.textContent = '✓ 没有发现问题，可以直接导出 gem.json 到游戏导入';
+    wrap.appendChild(d);
+  } else {
+    list.forEach(x => {
+      const row = document.createElement('div');
+      row.className = 'it ' + (x.level === 'e' ? 'e' : 'w');
+      const lv = document.createElement('span');
+      lv.className = 'lv';
+      lv.textContent = x.level === 'e' ? '错误' : '提醒';
+      const msg = document.createElement('span');
+      msg.textContent = x.msg;
+      row.appendChild(lv); row.appendChild(msg);
+      row.onclick = () => { if (x.item){ selectedKey = x.item; renderList(); renderDetail(); } };
+      wrap.appendChild(row);
+    });
+  }
+  box.appendChild(wrap);
+  detail.appendChild(box);
+}
+
+/* =========================================================
+   筛选事件
+   ========================================================= */
+searchInput.addEventListener('input', renderList);
+[fTier,fRank,fStat,fContainer].forEach(el => el.addEventListener('change', renderList));
+document.querySelectorAll('[data-tri]').forEach(btn => {
+  const st = {key:btn.dataset.tri, state:'all', btn};
+  triStates.push(st);
+  btn.addEventListener('click', () => {
+    st.state = st.state === 'all' ? 'on' : (st.state === 'on' ? 'off' : 'all');
+    btn.dataset.state = st.state;
+    btn.querySelector('.tri-val').textContent = st.state === 'all' ? '全部' : (st.state === 'on' ? '是' : '否');
+    renderList();
+  });
+});
+document.getElementById('resetFilter').onclick = () => {
+  searchInput.value = '';
+  fTier.value = ''; fRank.value = ''; fStat.value = ''; fContainer.value = '';
+  triStates.forEach(t => { t.state = 'all'; t.btn.dataset.state = 'all'; t.btn.querySelector('.tri-val').textContent = '全部'; });
+  renderList();
+};
+
+/* =========================================================
+   初始化
+   ========================================================= */
+(function init(){
+  try{
+    const raw = localStorage.getItem(LS_TAGS);
+    if (raw){ const o = JSON.parse(raw); if (o && Array.isArray(o.ranks)) tagTable = o; }
+  }catch(_){}
+  if (!tagTable) tagTable = DEFAULT_TAGS;
+
+  fillFilters();
+
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw){
+      const parsed = JSON.parse(raw);
+      data = Array.isArray(parsed) ? parsed.map(d => normalizeEntry(d.key, d)) : defaultData();
+    } else data = defaultData();
+  }catch(_){ data = defaultData(); }
+  if (!data.length) data = defaultData();
+  selectedKey = data[0].key;
+
+  issueCache.dirty();
+  renderList();
+  renderDetail();
+})();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EXP 表编辑器 · 骨架版</title>
+<style>
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{
+    display:flex;gap:8px;align-items:center;padding:10px 14px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  header h1{font-size:15px;margin:0 12px 0 0;color:var(--text-strong);font-weight:normal}
+  button{
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px;
+  }
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select{
+    background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);
+    padding:5px 8px;font-family:inherit;font-size:13px;width:100%;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .stat{color:var(--text-dim);font-size:12px;margin-left:auto}
+
+  .toolbar{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding:8px 14px;background:#161616;border-bottom:1px solid var(--line);
+    font-size:12px;
+  }
+  .toolbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim)}
+  .toolbar input{width:88px;padding:3px 6px;font-size:12px}
+  .toolbar .fsep{width:1px;height:18px;background:var(--line)}
+  .toolbar .hint{color:var(--text-dim);font-size:11px}
+
+  .stats{
+    display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+    padding:8px 14px;background:#0F0F0F;border-bottom:1px solid var(--line);
+    font-size:12px;color:var(--text-dim);
+  }
+  .stats b{color:var(--text-strong);font-weight:600;font-variant-numeric:tabular-nums}
+  .stats .pill{
+    background:#1A2A3A;color:#7FB8FF;padding:1px 8px;border-radius:3px;
+    font-size:11px;font-variant-numeric:tabular-nums;
+  }
+  .stats .pill.gold{background:#3A2A10;color:#F0C040}
+  .stats .pill.gain{background:#103A24;color:#5FE0A0}
+
+  main{flex:1;overflow:auto;min-height:0}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{
+    position:sticky;top:0;background:var(--panel2);color:var(--text-dim);
+    font-weight:normal;font-size:12px;z-index:1;
+  }
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.placeholder{opacity:.55}
+  tbody tr.highlight{background:#1A2A3A}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .dim{color:var(--text-dim)}
+  .lv-pill{
+    display:inline-block;padding:1px 6px;border-radius:3px;
+    background:#1A2A3A;color:#7FB8FF;font-size:11px;min-width:36px;text-align:center;
+  }
+  .lv-pill.locked{background:#2A1A1A;color:#E07A7A}
+  .in-exp{
+    width:120px;padding:3px 6px;font-size:12px;
+    background:#0E0E0E;border:1px solid var(--line);color:var(--text-strong);
+    text-align:right;
+  }
+  .in-exp:focus{outline:none;border-color:var(--accent)}
+  .in-exp:disabled{opacity:.4;cursor:not-allowed}
+  .ratio{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}
+  .ratio.up{color:#5FE0A0}
+  .ratio.down{color:#E07A7A}
+  .ratio.eq{color:#8A8A8A}
+  .bar{
+    position:relative;height:6px;background:#1E1E1E;border-radius:3px;overflow:hidden;
+    width:100px;display:inline-block;vertical-align:middle;
+  }
+  .bar > span{display:block;height:100%;background:linear-gradient(90deg,#2F5F9F,#4A9EFF)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+  .mini{font-size:11px;padding:2px 8px;background:#0E0E0E;border:1px solid var(--line);color:var(--accent);cursor:pointer}
+  .mini:hover{border-color:var(--accent)}
+  .mini:disabled{opacity:.4;cursor:not-allowed}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>EXP 编辑器 · 骨架版</h1>
+  <button id="appendBtn">＋ 追加一级</button>
+  <button id="removeBtn" class="danger">－ 删除末级</button>
+  <button id="importBtn">导入 JSON</button>
+  <button id="exportBtn">导出 JSON</button>
+  <button id="resetBtn" class="danger">重置为骨架</button>
+  <span class="stat" id="stat"></span>
+</header>
+
+<div class="toolbar">
+  <label>筛选 Lv
+    <input type="number" id="fLvMin" placeholder="min" min="1" step="1">
+    ~
+    <input type="number" id="fLvMax" placeholder="max" min="1" step="1">
+  </label>
+  <span class="fsep"></span>
+  <label>批量外推
+    从 Lv
+    <input type="number" id="bStart" value="2" min="2" step="1" style="width:56px">
+    起，因子
+    <input type="number" id="bFactor" value="1.1075" step="0.0001" min="1.0001">
+    <button id="batchBtn" class="mini">应用</button>
+  </label>
+  <span class="fsep"></span>
+  <label>批量设为常量
+    从 Lv
+    <input type="number" id="cStart" value="2" min="2" step="1" style="width:56px">
+    起，值
+    <input type="number" id="cValue" value="1000" min="0" step="1" style="width:96px">
+    <button id="constBtn" class="mini">应用</button>
+  </label>
+  <span class="hint">索引即等级；levels[i] = 从 Lv.i 升到 Lv.i+1 所需经验。</span>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<main>
+  <table>
+    <thead>
+      <tr>
+        <th>Lv</th>
+        <th>升级到</th>
+        <th class="num">需要经验 levels[i]</th>
+        <th class="num">相比上一级</th>
+        <th>占比</th>
+        <th class="num">累计需求（从 Lv.1 到 Lv.i）</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</main>
+
+<input type="file" id="importInput" accept=".json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   常量
+   ========================================================= */
+const LS_KEY = 'exp_editor_skeleton_v1';
+
+/* 骨架默认数据：与 rpg_demo_0.0.002.html 的 S_EXP 一致 */
+const SKELETON = [0, 0, 1000, 1107, 1225, 1357, 1502, 1662, 1840, 2037, 2255];
+
+const MAX_BAR = 120; /* 占比条参考上限 */
+
+/* =========================================================
+   状态
+   ========================================================= */
+let data = { levels: SKELETON.slice() };
+
+const tbody     = document.getElementById('tbody');
+const stats     = document.getElementById('stats');
+const stat      = document.getElementById('stat');
+const fLvMin    = document.getElementById('fLvMin');
+const fLvMax    = document.getElementById('fLvMax');
+
+/* =========================================================
+   工具
+   ========================================================= */
+function esc(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function save(){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e){}
+}
+function fmt(n){
+  return Number(n || 0).toLocaleString('en-US');
+}
+
+/* 累计：从 Lv.1 升到 Lv.i 需要 sum(levels[1..i-1]) */
+function cumulativeTo(levels, i){
+  let s = 0;
+  for (let k = 1; k < i; k++) s += Math.max(0, Number(levels[k]) || 0);
+  return s;
+}
+
+/* =========================================================
+   渲染
+   ========================================================= */
+function visibleRange(){
+  const min = fLvMin.value === '' ? 1 : Math.max(1, Math.floor(Number(fLvMin.value) || 1));
+  const max = fLvMax.value === '' ? data.levels.length - 1 : Math.floor(Number(fLvMax.value) || (data.levels.length - 1));
+  return {min, max: Math.min(max, data.levels.length - 1)};
+}
+
+function renderStats(){
+  const n = data.levels.length;
+  const total = data.levels.slice(2).reduce((a,b) => a + (Number(b)||0), 0);
+  const curMaxLv = Math.max(0, n - 1);
+  const avg = n > 2 ? Math.round(total / (n - 2)) : 0;
+  stats.innerHTML = `
+    <span>条目数 <b>${n}</b></span>
+    <span class="pill">等级上限 Lv.<b>${curMaxLv}</b></span>
+    <span class="pill gold">Lv.2 起总经验 <b>${fmt(total)}</b></span>
+    <span class="pill gain">平均每级 <b>${fmt(avg)}</b></span>
+    <span>提示：levels[0]=占位，levels[1]=Lv.1→2 经验，通常为 0</span>
+  `;
+  stat.textContent = `共 ${n} 条`;
+}
+
+function renderTable(){
+  const levels = data.levels;
+  const {min, max} = visibleRange();
+  if (max < min){ tbody.innerHTML = '<tr><td colspan="6" class="hint">没有可显示的行</td></tr>'; return; }
+
+  /* 占比分母：取当前可见区域内的最大值 */
+  let maxVal = 1;
+  for (let i = min; i <= max; i++){
+    const v = Number(levels[i]) || 0;
+    if (v > maxVal) maxVal = v;
+  }
+
+  const rows = [];
+  for (let i = min; i <= max; i++){
+    const v = Number(levels[i]) || 0;
+    const prev = i > 0 ? Number(levels[i-1]) || 0 : 0;
+    const cum = cumulativeTo(levels, i);
+    const disabled = (i === 0); /* 占位行禁用 */
+    const placeholder = (i === 0);
+
+    let ratioCls = 'eq', ratioTxt = '—';
+    if (i > 1 && prev > 0){
+      const r = v / prev;
+      ratioCls = r > 1 ? 'up' : (r < 1 ? 'down' : 'eq');
+      ratioTxt = '×' + r.toFixed(4);
+    } else if (i === 1){
+      ratioTxt = 'Lv.1→2';
+    }
+
+    const pct = Math.min(100, Math.round(v / maxVal * 100));
+    const barW = Math.max(2, pct);
+
+    rows.push(`<tr class="${placeholder ? 'placeholder' : ''}" data-idx="${i}">
+      <td><span class="lv-pill ${disabled ? 'locked' : ''}">Lv.${i}</span></td>
+      <td class="dim">Lv.${i + 1}</td>
+      <td class="num">
+        <input class="in-exp" type="number" step="1" min="0" data-idx="${i}" value="${v}" ${disabled ? 'disabled' : ''}>
+      </td>
+      <td class="num">
+        <span class="ratio ${ratioCls}">${ratioTxt}</span>
+      </td>
+      <td>
+        <span class="bar"><span style="width:${barW}%"></span></span>
+      </td>
+      <td class="num dim">${fmt(cum)}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+function renderAll(){
+  renderStats();
+  renderTable();
+}
+
+/* =========================================================
+   编辑
+   ========================================================= */
+tbody.addEventListener('input', e => {
+  const el = e.target;
+  if (!el.classList.contains('in-exp')) return;
+  const i = Number(el.dataset.idx);
+  if (!isFinite(i) || i < 0 || i >= data.levels.length) return;
+  let v = el.value === '' ? 0 : Number(el.value);
+  if (!isFinite(v) || v < 0) v = 0;
+  data.levels[i] = Math.max(0, Math.floor(v));
+  save();
+  /* 不重渲染整表，只刷新派生显示 */
+  renderStats();
+  refreshRowDerived(i);
+  /* 当前行的后面所有行累计也会变 */
+  for (let k = i + 1; k < data.levels.length; k++) refreshRowDerived(k);
+});
+
+tbody.addEventListener('change', e => {
+  const el = e.target;
+  if (!el.classList.contains('in-exp')) return;
+  /* 失焦后归一化显示 */
+  const i = Number(el.dataset.idx);
+  if (Number(el.value) !== data.levels[i]) el.value = data.levels[i];
+});
+
+/* 只刷新某一行的派生列（相比上一级 / 累计），避免失焦 */
+function refreshRowDerived(i){
+  const tr = tbody.querySelector(`tr[data-idx="${i}"]`);
+  if (!tr) return;
+  const v = Number(data.levels[i]) || 0;
+  const prev = i > 0 ? Number(data.levels[i-1]) || 0 : 0;
+  const cum = cumulativeTo(data.levels, i);
+
+  const ratioEl = tr.querySelector('.ratio');
+  if (ratioEl){
+    if (i === 1){ ratioEl.className = 'ratio eq'; ratioEl.textContent = 'Lv.1→2'; }
+    else if (i > 1 && prev > 0){
+      const r = v / prev;
+      ratioEl.className = 'ratio ' + (r > 1 ? 'up' : (r < 1 ? 'down' : 'eq'));
+      ratioEl.textContent = '×' + r.toFixed(4);
+    } else {
+      ratioEl.className = 'ratio eq';
+      ratioEl.textContent = '—';
+    }
+  }
+  const cumEl = tr.children[5];
+  if (cumEl) cumEl.textContent = fmt(cum);
+}
+
+/* =========================================================
+   追加 / 删除 / 重置
+   ========================================================= */
+document.getElementById('appendBtn').onclick = () => {
+  const n = data.levels.length;
+  const last = Number(data.levels[n-1]) || 1000;
+  const prev = Number(data.levels[n-2]) || last;
+  const ratio = prev > 0 ? last / prev : 1.1075;
+  const next = Math.max(1, Math.round(last * ratio));
+  data.levels.push(next);
+  save(); renderAll();
+  /* 滚动到新行 */
+  const lastRow = tbody.querySelector(`tr[data-idx="${data.levels.length-1}"]`);
+  if (lastRow) lastRow.scrollIntoView({block:'center'});
+};
+
+document.getElementById('removeBtn').onclick = () => {
+  if (data.levels.length <= 2){
+    alert('至少保留 levels[0] 与 levels[1]');
+    return;
+  }
+  data.levels.pop();
+  save(); renderAll();
+};
+
+document.getElementById('resetBtn').onclick = () => {
+  if (!confirm('重置为骨架数据？当前编辑将丢失。')) return;
+  data.levels = SKELETON.slice();
+  save(); renderAll();
+};
+
+/* =========================================================
+   批量工具
+   ========================================================= */
+document.getElementById('batchBtn').onclick = () => {
+  const start = Math.max(2, Math.floor(Number(document.getElementById('bStart').value) || 2));
+  let factor = Number(document.getElementById('bFactor').value);
+  if (!isFinite(factor) || factor <= 1){
+    alert('因子必须 > 1');
+    return;
+  }
+  if (start >= data.levels.length){
+    alert('起始等级超出范围');
+    return;
+  }
+  const base = Number(data.levels[start-1]) || 1000;
+  for (let i = start; i < data.levels.length; i++){
+    const v = Math.round(base * Math.pow(factor, i - start + 1));
+    data.levels[i] = Math.max(1, v);
+  }
+  save(); renderAll();
+};
+
+document.getElementById('constBtn').onclick = () => {
+  const start = Math.max(2, Math.floor(Number(document.getElementById('cStart').value) || 2));
+  const val = Math.max(0, Math.floor(Number(document.getElementById('cValue').value) || 0));
+  if (start >= data.levels.length){
+    alert('起始等级超出范围');
+    return;
+  }
+  for (let i = start; i < data.levels.length; i++){
+    data.levels[i] = val;
+  }
+  save(); renderAll();
+};
+
+/* =========================================================
+   筛选
+   ========================================================= */
+fLvMin.addEventListener('input', renderTable);
+fLvMax.addEventListener('input', renderTable);
+
+/* =========================================================
+   导入 / 导出
+   ========================================================= */
+document.getElementById('importBtn').onclick = () => {
+  document.getElementById('importInput').click();
+};
+
+document.getElementById('importInput').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const obj = JSON.parse(ev.target.result);
+      let levels;
+      if (Array.isArray(obj)){
+        levels = obj;
+      } else if (obj && typeof obj === 'object' && Array.isArray(obj.levels)){
+        levels = obj.levels;
+      } else {
+        throw new Error('根节点必须是 { levels: [...] } 或数组');
+      }
+      levels = levels.map(v => {
+        const n = Number(v);
+        return isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+      });
+      if (levels.length < 2) throw new Error('至少需要 2 个值（levels[0] 与 levels[1]）');
+      data.levels = levels;
+      save(); renderAll();
+    }catch(err){
+      alert('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+function buildJSONText(){
+  /* 与骨架 { "levels": [...] } 结构一致 */
+  return JSON.stringify({ levels: data.levels.map(v => Math.max(0, Math.floor(Number(v) || 0))) }, null, 2);
+}
+
+document.getElementById('exportBtn').onclick = () => {
+  const text = buildJSONText();
+  const blob = new Blob([text], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'exp.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* =========================================================
+   启动
+   ========================================================= */
+(function init(){
+  const raw = localStorage.getItem(LS_KEY);
+  if (raw){
+    try{
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.levels)){
+        data.levels = parsed.levels.map(v => Math.max(0, Math.floor(Number(v) || 0)));
+      } else if (Array.isArray(parsed)){
+        data.levels = parsed.map(v => Math.max(0, Math.floor(Number(v) || 0)));
+      }
+    }catch(_){}
+  }
+  if (!Array.isArray(data.levels) || data.levels.length < 2){
+    data.levels = SKELETON.slice();
+  }
+  renderAll();
+})();
+
+})();
+</script>
+</body>
+</html>

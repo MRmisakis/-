@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Items 表编辑器 · 合并版（3 框架 + 2 效果矩阵）</title>
+<style>
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040; --warn:#E8B14C;
+  }
+  *{box-sizing:border-box;scrollbar-color:#555 #000;scrollbar-width:thin}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:#000}
+  ::-webkit-scrollbar-thumb{background:#555;border-radius:5px;border:1px solid #000}
+  ::-webkit-scrollbar-thumb:hover{background:#777}
+  ::-webkit-scrollbar-corner{background:#000}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New","PingFang SC","Microsoft YaHei",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{display:flex;gap:8px;align-items:center;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:15px;margin:0 12px 0 0;color:var(--text-strong);font-weight:normal}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px}
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select,textarea{background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);padding:5px 8px;font-family:inherit;font-size:13px;width:100%}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  #searchInput{width:190px}
+  .stat{color:var(--text-dim);font-size:12px;margin-left:auto}
+
+  .filterbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 14px;background:#161616;border-bottom:1px solid var(--line);font-size:12px}
+  .filterbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim)}
+  .filterbar select{width:auto;padding:3px 6px;font-size:12px}
+  .fsep{width:1px;height:18px;background:var(--line)}
+  .tri{border:1px solid var(--line);background:var(--panel2);padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;border-radius:3px}
+  .tri b{font-weight:normal;color:#777}
+  .tri[data-state="on"]{border-color:var(--gain);color:var(--gain)}
+  .tri[data-state="on"] b{color:var(--gain)}
+  .tri[data-state="off"]{border-color:var(--danger);color:var(--danger)}
+  .tri[data-state="off"] b{color:var(--danger)}
+  #resetFilter{margin-left:auto;padding:4px 10px;font-size:12px}
+
+  main{flex:1;display:flex;min-height:0}
+  .left{flex:1;min-width:0;overflow:auto;border-right:1px solid var(--line)}
+  .right{width:600px;flex:none;overflow:auto;padding:14px;background:var(--panel)}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{position:sticky;top:0;background:var(--panel2);color:var(--text-dim);font-weight:normal;font-size:12px;z-index:1}
+  th[data-sort]{cursor:pointer;user-select:none}
+  th[data-sort]:hover{color:var(--text-strong)}
+  th.sorted{color:var(--accent)}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.selected{background:#1A2A3A}
+  tbody tr.dragging{opacity:.35}
+  tbody tr.drop-before td{border-top:2px solid var(--accent)}
+  tbody tr.drop-after td{border-bottom:2px solid var(--accent)}
+  td.drag{cursor:grab;color:#4a4a4a;text-align:center;user-select:none;width:26px}
+  td.drag:active{cursor:grabbing}
+  .num{text-align:right}
+  .dim{color:var(--text-dim)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+
+  .field{margin-bottom:9px}
+  .field label{display:block;color:var(--text-dim);font-size:12px;margin-bottom:3px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:0 8px}
+  .section-title{color:var(--accent);font-size:13px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .section-title:first-child{margin-top:0}
+  .bool-item{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12px;color:var(--text)}
+  .bool-item input{display:none}
+  .bool-item .track{width:30px;height:16px;border-radius:8px;background:#2a2a2a;border:1px solid var(--line);position:relative;flex:none;margin-left:auto;transition:background .15s,border-color .15s}
+  .bool-item .track::after{content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:#666;transition:transform .15s,background .15s}
+  .bool-item input:checked + .track{background:#16324d;border-color:var(--accent)}
+  .bool-item input:checked + .track::after{transform:translateX(14px);background:var(--accent)}
+  .chk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 8px;margin-top:4px}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer}
+  .chk input{width:auto;accent-color:var(--accent)}
+  .tagline{font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.5}
+  .mini{font-size:11px;color:var(--text-dim)}
+  .note{border-left:3px solid var(--warn);background:#1E1A12;padding:6px 9px;font-size:11px;color:#D6BE93;margin:8px 0;line-height:1.6}
+
+  /* 效果矩阵（来自 2） */
+  .eff-head,.eff-row{display:grid;grid-template-columns:86px repeat(7,1fr);gap:4px;align-items:center}
+  .eff-head{margin-bottom:4px}
+  .eff-head span{font-size:10px;color:#666;text-align:center}
+  .eff-head span:first-child{text-align:left}
+  .eff-row{margin-bottom:3px}
+  .eff-label{font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .eff-row input[type=number]{padding:2px 4px;font-size:11px;width:100%;text-align:center}
+  .eff-row input[type=checkbox]{justify-self:center;width:auto;accent-color:var(--accent)}
+
+  /* SECTION: 道具说明（仅编辑器） */
+  .notebox{border:1px solid var(--line);background:#141414;padding:8px}
+  .notebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .notebar .chk{margin-right:auto}
+  .notebar button{padding:4px 10px;font-size:12px}
+  .notearea{width:100%;min-height:220px;resize:vertical;line-height:1.6;font-size:12px;background:#0E0E0E;white-space:pre}
+  .noteresult{font-size:11px;color:var(--gain);margin-top:6px;line-height:1.6}
+  .noteresult:empty{display:none}
+  .noteresult.warn{color:var(--warn)}
+  .legend{margin-top:10px;font-size:11px;color:var(--text-dim);line-height:1.7;border:1px solid var(--line);background:#151515;padding:6px 9px}
+  .legend summary{cursor:pointer;color:var(--accent);font-size:12px;outline:none}
+  .legend table{width:100%;margin-top:6px;border-collapse:collapse}
+  .legend td{border-bottom:1px solid #222;padding:3px 6px;white-space:normal;text-align:left}
+  .legend td:first-child{color:var(--text-strong);width:64px}
+
+  @media(max-width:900px){
+    body{height:auto;min-height:100vh;overflow:auto}
+    main{flex-direction:column}
+    .left{border-right:none;border-bottom:1px solid var(--line);max-height:46vh}
+    .right{width:auto;flex:none;overflow:visible}
+    .grid2,.grid3,.grid4,.chk-grid{grid-template-columns:1fr 1fr}
+    .eff-head,.eff-row{grid-template-columns:70px repeat(7,1fr)}
+    .notearea{font-size:16px}
+    #searchInput{width:130px}
+    .stat{margin-left:0;width:100%}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Items 编辑器 · 合并版</h1>
+  <button id="addBtn">＋ 新增</button>
+  <button id="dupBtn">⧉ 复制</button>
+  <button id="delBtn" class="danger">－ 删除</button>
+  <button id="importBtn">导入 JSON</button>
+  <button id="exportBtn">导出 JSON</button>
+  <input type="text" id="searchInput" placeholder="搜索 Key / ID / 名字">
+  <span class="stat" id="stat"></span>
+</header>
+
+<div class="filterbar">
+  <label>类型 <select id="fType"></select></label>
+  <label>稀有度 <select id="fRarity"></select></label>
+  <label>装备槽 <select id="fSlot"></select></label>
+  <label>容器 <select id="fContainer"></select></label>
+  <span class="fsep"></span>
+  <button class="tri" data-tri="AutoUse" data-state="all">自动使用 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="Use" data-state="all">可使用 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="IsSaleable" data-state="all">可出售 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="IsBuyable" data-state="all">可购买 · <b class="tri-val">全部</b></button>
+  <button class="tri" data-tri="_debugSample" data-state="all">调试样例 · <b class="tri-val">全部</b></button>
+  <button id="resetFilter">重置筛选</button>
+</div>
+
+<main>
+  <div class="left">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th data-sort="key" data-label="Key">Key</th>
+          <th data-sort="_id" data-label="_id">_id</th>
+          <th data-sort="name" data-label="名字">名字</th>
+          <th data-sort="type" data-label="类型">类型</th>
+          <th data-sort="rarity" data-label="稀有度">稀有度</th>
+          <th class="num" data-sort="stack" data-label="堆叠">堆叠</th>
+          <th class="num" data-sort="price" data-label="价格">价格</th>
+          <th class="num" data-sort="useTime" data-label="作用时间">作用时间</th>
+          <th data-sort="slot" data-label="装备槽">装备槽</th>
+          <th data-sort="container" data-label="容器">容器</th>
+          <th>调试</th>
+        </tr>
+      </thead>
+      <tbody id="listBody"></tbody>
+    </table>
+  </div>
+  <div class="right" id="detail"></div>
+</main>
+
+<input type="file" id="importInput" accept=".json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   常量（3 的骨架 + 2 的效果矩阵）
+   ========================================================= */
+const LS_KEY = 'items_editor_merged_v1';
+
+const TYPE_OPTIONS = ['物品','货币','消耗品','材料','食材','装备'];
+const RARITY_OPTIONS = ['普通','优秀','精良','史诗','传说','神话'];
+const RARITY_COLOR = {'普通':'#BABABA','优秀':'#27A057','精良':'#1B4DC0','史诗':'#B02BF7','传说':'#FFC552','神话':'#B01C1C'};
+const SLOT_OPTIONS = ['', 'head','ear','chest','hands','legs','feet','weapon','bag'];
+const SLOT_LABEL = {'':'无','head':'头部','ear':'耳部','chest':'胸部','hands':'手部','legs':'腿部','feet':'脚部','weapon':'武器','bag':'背包'};
+const CONTAINER_OPTIONS = ['bag','storage','pocket','hotbar','safe'];
+const CONTAINER_LABEL = {bag:'背包',storage:'仓库',pocket:'口袋',hotbar:'快捷栏',safe:'安全箱'};
+const STAT_KEYS = ['STR','DEF','MGA','MGD','LUK','SPD','HP','MP'];
+const STAT_LABEL = {STR:'STR 物攻',DEF:'DEF 物防',MGA:'MGA 魔攻',MGD:'MGD 魔防',LUK:'LUK 幸运',SPD:'SPD 速度',HP:'HP 生命',MP:'MP 魔法'};
+const CURE_OPTIONS = ['Poison','Bleed','Burn','Frostbite','Paralysis','Infection','Fracture','Pain','AcidCorrosion'];
+
+/* 2 的正 / 负向效果 */
+const POS_KEYS = [
+  ['AttackBoost','攻击提升'],['DefenseBoost','防御提升'],['SpeedBoost','速度提升'],['CritBoost','暴击提升'],
+  ['HealthRegen','生命回复'],['ManaRegen','法力回复'],['ExperienceIncrease','经验增加'],['ExperienceBonus','经验加成'],
+  ['CopperBonus','铜币加成'],['CopperIncrease','铜币增加'],['DropRateBonus','掉落加成'],['GatherRateBonus','采集加成']
+];
+const NEG_KEYS = [
+  ['MinorBleeding','轻微流血'],['MajorBleeding','严重流血'],['Infection','感染'],['Fracture','骨折'],['Pain','疼痛'],
+  ['Poison','中毒'],['Paralysis','麻痹'],['Burn','烧伤'],['Frostbite','冻伤'],['AcidCorrosion','酸蚀']
+];
+/* 效果数组 7 列：数值 % 移除 时间 持续 淡出 消耗 */
+function zeroEff(){ return [0,false,false,0,0,0,0]; }
+function defaultEffects(keys){ const o={}; keys.forEach(k=>{o[k]=zeroEff();}); return o; }
+function normEff(v){
+  const out = zeroEff();
+  if (Array.isArray(v)) for (let i=0;i<7;i++){
+    if (v[i]===undefined||v[i]===null) continue;
+    if (i===1||i===2) out[i]=!!v[i];
+    else { const n=Number(v[i]); out[i]=isNaN(n)?0:n; }
+  }
+  return out;
+}
+function effHasValue(sec){ return Object.keys(sec||{}).some(k => (sec[k]||zeroEff()).some((v,i)=> i===1||i===2 ? v : Number(v)!==0)); }
+
+const PROPS_ORDER = [
+  'Name','ShortName','Description','Rarity','Price',
+  'StackMaxSize','Width','Height','Weight','IsSaleable','IsBuyable',
+  'Slot','Stats','CapacityGrid','GemSlots',
+  'Use','AutoUse','AutoUseEnabled','AutoUseDelay',
+  'TriggerCondition','TriggerConditionValue',
+  'PreDelayEnabled','PreUseDelay','PostDelayEnabled','PostUseDelay',
+  'ItemEffectType','ItemUseTime','MaxHpResource','HpResourceRate','MaxMpResource','MpResourceRate','Cooldown','CureEffects',
+  'PositiveEffects','NegativeEffects',
+  'RepairCost','RepairSpeed',
+  'MaterialType','Tier','Tags','AllowedContainers'
+];
+
+/* =========================================================
+   数据模型
+   ========================================================= */
+function defaultProps(){
+  return {
+    Name:'', ShortName:'', Description:'',
+    Rarity:'普通', Price:0,
+    StackMaxSize:1, Width:1, Height:1, Weight:0.1,
+    IsSaleable:true, IsBuyable:true,
+    Slot:null, Stats:null, CapacityGrid:null, GemSlots:0,
+    Use:null,
+    AutoUse:null, AutoUseEnabled:true, AutoUseDelay:0,
+    TriggerCondition:'HP', TriggerConditionValue:0,
+    PreDelayEnabled:false, PreUseDelay:0,
+    PostDelayEnabled:false, PostUseDelay:0,
+    ItemEffectType:'作用期间',
+    ItemUseTime:0, MaxHpResource:0, HpResourceRate:0, MaxMpResource:0, MpResourceRate:0, Cooldown:0, CureEffects:[],
+    PositiveEffects: defaultEffects(POS_KEYS.map(k=>k[0])),
+    NegativeEffects: defaultEffects(NEG_KEYS.map(k=>k[0])),
+    RepairCost:0, RepairSpeed:0,
+    MaterialType:null, Tier:1, Tags:[],
+    AllowedContainers:['bag','storage','pocket','hotbar']
+  };
+}
+function normNum(v,d){ const n=Number(v); return isFinite(n)?n:d; }
+
+function normalizeProps(src){
+  const d = defaultProps();
+  if (!src || typeof src !== 'object') return d;
+  Object.keys(d).forEach(k => {
+    if (src[k]===undefined || src[k]===null) return;
+    if (k==='PositiveEffects' || k==='NegativeEffects'){
+      const s = src[k]||{};
+      Object.keys(d[k]).forEach(ek => { d[k][ek] = normEff(s[ek]); });
+    } else d[k] = src[k];
+  });
+  if (src.IsUnbuyable!==undefined && src.IsBuyable===undefined) d.IsBuyable = !src.IsUnbuyable;
+  if (src.IsUnsaleable!==undefined && src.IsSaleable===undefined) d.IsSaleable = !src.IsUnsaleable;
+  if (!Array.isArray(d.AllowedContainers)) d.AllowedContainers = d.AllowedContainers?[d.AllowedContainers]:['bag','storage','pocket','hotbar'];
+  d.AllowedContainers = d.AllowedContainers.filter(x=>CONTAINER_OPTIONS.includes(x));
+  d.Weight = normNum(d.Weight,0.1);
+  d.Width = Math.max(1,Math.floor(normNum(d.Width,1)));
+  d.Height = Math.max(1,Math.floor(normNum(d.Height,1)));
+  d.StackMaxSize = Math.max(1,Math.floor(normNum(d.StackMaxSize,1)));
+  d.Price = Math.max(0,Math.floor(normNum(d.Price,0)));
+  d.Tier = Math.max(1,Math.floor(normNum(d.Tier,1)));
+  d.GemSlots = Math.max(0,Math.floor(normNum(d.GemSlots,0)));
+  d.RepairCost = Math.max(0,normNum(d.RepairCost,0));
+  d.RepairSpeed = Math.max(0,normNum(d.RepairSpeed,0));
+
+  if (d.Stats && typeof d.Stats==='object'){
+    const st={}; STAT_KEYS.forEach(k=>{ if(d.Stats[k]!==undefined&&d.Stats[k]!==null&&d.Stats[k]!==''){ const n=Number(d.Stats[k]); if(isFinite(n)&&n!==0) st[k]=n; } });
+    d.Stats = Object.keys(st).length?st:null;
+  } else d.Stats=null;
+
+  if (d.CapacityGrid && typeof d.CapacityGrid==='object'){
+    const w=Math.max(0,Math.floor(normNum(d.CapacityGrid.w,0))), h=Math.max(0,Math.floor(normNum(d.CapacityGrid.h,0)));
+    d.CapacityGrid = (w>0&&h>0)?{w,h}:null;
+  } else d.CapacityGrid=null;
+
+  if (d.Use && typeof d.Use==='object'){
+    const u={};
+    if (d.Use.hp!==undefined && Number(d.Use.hp)>0) u.hp=Number(d.Use.hp);
+    if (d.Use.mp!==undefined && Number(d.Use.mp)>0) u.mp=Number(d.Use.mp);
+    if (Array.isArray(d.Use.cure)&&d.Use.cure.length) u.cure=d.Use.cure.filter(Boolean);
+    d.Use = Object.keys(u).length?u:null;
+  } else d.Use=null;
+
+  if (d.AutoUse && typeof d.AutoUse==='object'){
+    const a={};
+    if (d.AutoUse.hpBelow!==undefined && Number(d.AutoUse.hpBelow)>0) a.hpBelow=Number(d.AutoUse.hpBelow);
+    if (d.AutoUse.mpBelow!==undefined && Number(d.AutoUse.mpBelow)>0) a.mpBelow=Number(d.AutoUse.mpBelow);
+    if (d.AutoUse.cooldownSec!==undefined && Number(d.AutoUse.cooldownSec)>0) a.cooldownSec=Number(d.AutoUse.cooldownSec);
+    d.AutoUse = Object.keys(a).length?a:null;
+  } else d.AutoUse=null;
+
+  d.Cooldown = Math.max(0,normNum(d.Cooldown,0));
+  d.MaxMpResource = Math.max(0,normNum(d.MaxMpResource,0));
+  d.MpResourceRate = Math.max(0,normNum(d.MpResourceRate,0));
+  d.CureEffects = Array.isArray(d.CureEffects)?d.CureEffects.filter(Boolean).map(String):[];
+  d.Tags = Array.isArray(d.Tags)?d.Tags.filter(Boolean).map(String):[];
+  if (d.MaterialType==='') d.MaterialType=null;
+  if (d.Slot==='') d.Slot=null;
+  Object.keys(src).forEach(k=>{ if(!(k in d)) d[k]=src[k]; });
+  return d;
+}
+
+function normalizeEntry(key,obj){
+  obj=obj||{};
+  const out={
+    key:String(key),
+    _id: obj._id!=null?String(obj._id):'',
+    _name: obj._name!=null?String(obj._name):'',
+    _parent: obj._parent!=null?String(obj._parent):'0001',
+    _type: obj._type!=null?String(obj._type):'物品',
+    _debugSample: !!obj._debugSample,
+    _props: normalizeProps(obj._props),
+    /* 编辑器专用字段（_ui 前缀一律不导出到 JSON） */
+    _uiNote: typeof obj._uiNote==='string'?obj._uiNote:'',
+    _uiNoteAuto: obj._uiNoteAuto===undefined?true:!!obj._uiNoteAuto
+  };
+  out._uiNoteDirty=false;
+  Object.keys(obj).forEach(k=>{ if(!(k in out)&&k!=='_props') out[k]=obj[k]; });
+  return out;
+}
+
+function defaultData(){
+  return [
+    normalizeEntry('100000',{_id:'100000',_name:'铜币',_type:'货币',_debugSample:true,
+      _props:{Name:'铜币',Price:1,StackMaxSize:1000000,Width:1,Height:1,Weight:0,IsSaleable:false,AllowedContainers:['bag','storage','pocket','hotbar']}}),
+    normalizeEntry('100001',{_id:'100001',_name:'劣质血药',_type:'消耗品',_debugSample:true,
+      _props:{Name:'劣质血药',Price:20,StackMaxSize:20,Width:1,Height:1,Weight:.2,IsSaleable:true,
+        AllowedContainers:['bag','storage','pocket','hotbar'],Use:{hp:30},AutoUse:{hpBelow:.3,cooldownSec:1},
+        AutoUse:true,AutoUseEnabled:true,AutoUseDelay:1,TriggerCondition:'HP',TriggerConditionValue:0.33,
+        PreDelayEnabled:true,PreUseDelay:1,ItemEffectType:'作用期间',MaxHpResource:30,HpResourceRate:15,ItemUseTime:2,
+        PositiveEffects:{HealthRegen:[30,false,false,0,2,0,0]}}}),
+    normalizeEntry('100010',{_id:'100010',_name:'劣质蓝药',_type:'消耗品',_debugSample:true,
+      _props:{Name:'劣质蓝药',Price:25,StackMaxSize:20,Width:1,Height:1,Weight:.2,IsSaleable:true,
+        AllowedContainers:['bag','storage','pocket','hotbar'],Use:{mp:20},AutoUse:{mpBelow:.2,cooldownSec:1}}}),
+    normalizeEntry('200001',{_id:'200001',_name:'橡木原木',_type:'材料',_debugSample:true,
+      _props:{Name:'橡木原木',Price:5,StackMaxSize:99,Width:1,Height:2,Weight:.6,IsSaleable:true,MaterialType:'木材',Tier:1,Tags:['木工','建造'],AllowedContainers:['bag','storage']}}),
+    normalizeEntry('300001',{_id:'300001',_name:'木剑',_type:'装备',_debugSample:true,
+      _props:{Name:'木剑',Price:40,StackMaxSize:1,Width:1,Height:3,Weight:1.2,IsSaleable:true,Slot:'weapon',Stats:{STR:8},GemSlots:1,RepairCost:10,RepairSpeed:1,AllowedContainers:['bag','storage']}}),
+    normalizeEntry('300100',{_id:'300100',_name:'基础背包',_type:'装备',_debugSample:true,
+      _props:{Name:'基础背包',Price:100,StackMaxSize:1,Width:3,Height:2,Weight:1,IsSaleable:true,Slot:'bag',CapacityGrid:{w:8,h:5},AllowedContainers:['storage']}})
+  ];
+}
+
+/* =========================================================
+   状态 / 工具
+   ========================================================= */
+let data=[], selectedKey=null;
+const listBody=document.getElementById('listBody'), detail=document.getElementById('detail'),
+  stat=document.getElementById('stat'), searchInput=document.getElementById('searchInput'),
+  fType=document.getElementById('fType'), fRarity=document.getElementById('fRarity'),
+  fSlot=document.getElementById('fSlot'), fContainer=document.getElementById('fContainer');
+const triStates=[];
+function esc(s){ return String(s===null||s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){} }
+function currentItem(){ return data.find(d=>d.key===selectedKey)||null; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+/* =========================================================
+   筛选 / 列表
+   ========================================================= */
+function fillFilters(){
+  fType.innerHTML='<option value="">全部类型</option>'+TYPE_OPTIONS.map(v=>'<option>'+esc(v)+'</option>').join('');
+  fRarity.innerHTML='<option value="">全部稀有度</option>'+RARITY_OPTIONS.map(v=>'<option>'+esc(v)+'</option>').join('');
+  fSlot.innerHTML='<option value="">全部槽位</option>'+SLOT_OPTIONS.filter(Boolean).map(v=>'<option value="'+esc(v)+'">'+esc(SLOT_LABEL[v]||v)+'</option>').join('');
+  fContainer.innerHTML='<option value="">全部容器</option>'+CONTAINER_OPTIONS.map(v=>'<option value="'+esc(v)+'">'+esc(CONTAINER_LABEL[v])+'</option>').join('');
+}
+let sortKey=null, sortDir=1;
+function natCmp(a,b){a=String(a==null?'':a);b=String(b==null?'':b);
+  if(/^\d+$/.test(a)&&/^\d+$/.test(b))return Number(a)-Number(b);
+  return a.localeCompare(b);}
+function cmpSort(a,b){
+  const p=a._props||{}, q=b._props||{};
+  const ri=x=>{const i=RARITY_OPTIONS.indexOf(x);return i<0?99:i;};
+  let r=0;
+  switch(sortKey){
+    case 'key': r=natCmp(a.key,b.key);break;
+    case '_id': r=natCmp(a._id,b._id);break;
+    case 'name': r=String(p.Name||a._name||'').localeCompare(String(q.Name||b._name||''),'zh');break;
+    case 'type': r=String(a._type||'').localeCompare(String(b._type||''),'zh');break;
+    case 'rarity': r=ri(p.Rarity)-ri(q.Rarity);break;
+    case 'stack': r=(Number(p.StackMaxSize)||0)-(Number(q.StackMaxSize)||0);break;
+    case 'price': r=(Number(p.Price)||0)-(Number(q.Price)||0);break;
+    case 'useTime': r=(Number(p.ItemUseTime)||0)-(Number(q.ItemUseTime)||0);break;
+    case 'slot': r=SLOT_OPTIONS.indexOf(p.Slot||'')-SLOT_OPTIONS.indexOf(q.Slot||'');break;
+    case 'container': r=(p.AllowedContainers||[]).join('/').localeCompare((q.AllowedContainers||[]).join('/'));break;
+  }
+  return r*sortDir;
+}
+function updateSortMarks(){
+  document.querySelectorAll('thead th[data-sort]').forEach(th=>{
+    const on=th.dataset.sort===sortKey;
+    th.classList.toggle('sorted',on);
+    th.textContent=th.dataset.label+(on?(sortDir===1?' ▲':' ▼'):' ⇅');
+  });
+}
+document.querySelector('thead').addEventListener('click',e=>{
+  const th=e.target.closest('th[data-sort]'); if(!th) return;
+  const k=th.dataset.sort;
+  if(sortKey!==k){sortKey=k;sortDir=1;}
+  else if(sortDir===1){sortDir=-1;}
+  else {sortKey=null;sortDir=1;}
+  updateSortMarks(); renderList();
+});
+function visibleRows(){
+  const q=searchInput.value.trim().toLowerCase();
+  const rows=data.filter(d=>{
+    const p=d._props||{};
+    if(q){ const hay=[d.key,d._id,d._name,p.Name,p.ShortName,p.Description,p.MaterialType].join(' ').toLowerCase(); if(hay.indexOf(q)===-1) return false; }
+    if(fType.value && d._type!==fType.value) return false;
+    if(fRarity.value && p.Rarity!==fRarity.value) return false;
+    if(fSlot.value && p.Slot!==fSlot.value) return false;
+    if(fContainer.value && !(p.AllowedContainers||[]).includes(fContainer.value)) return false;
+    for(const t of triStates){
+      if(t.state==='all') continue;
+      const v = t.key==='_debugSample' ? !!d._debugSample
+              : t.key==='AutoUse' ? !!(p.AutoUseEnabled || p.AutoUse)
+              : !!p[t.key];
+      if(t.state==='on'&&!v) return false;
+      if(t.state==='off'&&v) return false;
+    }
+    return true;
+  });
+  if(sortKey) rows.sort(cmpSort);
+  return rows;
+}
+function renderList(){
+  const rows=visibleRows();
+  listBody.innerHTML=rows.map(d=>{
+    const p=d._props||{};
+    const color=RARITY_COLOR[p.Rarity]||'#C8C8C8';
+    const conts=(p.AllowedContainers||[]).map(c=>CONTAINER_LABEL[c]||c).join('/');
+    return '<tr data-key="'+esc(d.key)+'" draggable="'+(sortKey?'false':'true')+'" class="'+(d.key===selectedKey?'selected':'')+'">'
+      +'<td class="drag">'+(sortKey?'':'⠿')+'</td><td class="dim">'+esc(d.key)+'</td><td class="dim">'+esc(d._id)+'</td>'
+      +'<td style="color:'+color+'">'+esc(p.Name||d._name||'')+'</td><td class="dim">'+esc(d._type)+'</td>'
+      +'<td style="color:'+color+'">'+esc(p.Rarity||'')+'</td><td class="num">'+(p.StackMaxSize??'')+'</td>'
+      +'<td class="num">'+(p.Price??'')+'</td><td class="num">'+(p.ItemUseTime??'')+'</td>'
+      +'<td class="dim">'+esc(p.Slot?(SLOT_LABEL[p.Slot]||p.Slot):'')+'</td>'
+      +'<td class="dim">'+esc(conts)+'</td><td class="dim">'+(d._debugSample?'✓':'')+'</td></tr>';
+  }).join('');
+  stat.textContent='共 '+data.length+' 条'+(rows.length!==data.length?' / 显示 '+rows.length:'')+(sortKey?' · 排序中（拖拽停用）':'');
+}
+
+/* 拖拽排序 */
+let dragKey=null, dropTarget=null;
+function clearDropMarkers(){ listBody.querySelectorAll('.drop-before,.drop-after').forEach(el=>el.classList.remove('drop-before','drop-after')); }
+function moveItem(srcKey,tgtKey,after){
+  const si=data.findIndex(d=>d.key===srcKey); if(si<0) return;
+  const item=data.splice(si,1)[0];
+  let ti=data.findIndex(d=>d.key===tgtKey); if(ti<0){ data.splice(si,0,item); return; }
+  if(after) ti+=1;
+  data.splice(ti,0,item); save(); renderList();
+}
+listBody.addEventListener('dragstart',e=>{ if(sortKey){e.preventDefault();return;} const tr=e.target.closest('tr'); if(!tr) return; dragKey=tr.dataset.key; tr.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragKey);}catch(_){} });
+listBody.addEventListener('dragover',e=>{ if(!dragKey) return; e.preventDefault(); e.dataTransfer.dropEffect='move';
+  const sc=listBody.closest('.left');
+  if(sc){ const r0=sc.getBoundingClientRect();
+    if(e.clientY<r0.top+48) sc.scrollTop-=14;
+    else if(e.clientY>r0.bottom-48) sc.scrollTop+=14; }
+  const tr=e.target.closest('tr'); clearDropMarkers(); if(!tr||tr.dataset.key===dragKey){dropTarget=null;return;} const r=tr.getBoundingClientRect(); const after=(e.clientY-r.top)>r.height/2; tr.classList.add(after?'drop-after':'drop-before'); dropTarget={key:tr.dataset.key,after}; });
+listBody.addEventListener('drop',e=>{ if(!dragKey||!dropTarget) return; e.preventDefault(); const s=dragKey,t=dropTarget; dragKey=null;dropTarget=null;clearDropMarkers(); moveItem(s,t.key,t.after); });
+listBody.addEventListener('dragend',()=>{ dragKey=null;dropTarget=null;clearDropMarkers(); listBody.querySelectorAll('tr.dragging').forEach(el=>el.classList.remove('dragging')); });
+
+/* =========================================================
+   表单片段
+   ========================================================= */
+function optionList(list,val,ph){
+  const opts=list.slice();
+  if(val!==null&&val!==undefined&&val!==''&&opts.indexOf(val)===-1) opts.unshift(val);
+  let h='<option value=""'+((val===null||val===undefined||val==='')?' selected':'')+'>（'+ph+'）</option>';
+  h+=opts.map(o=>'<option value="'+esc(o)+'"'+(o===val?' selected':'')+'>'+esc(SLOT_LABEL[o]||o)+'</option>').join('');
+  return h;
+}
+function field(label,attr,val,opt){
+  opt=opt||{}; let ctrl;
+  switch(opt.kind){
+    case 'select': ctrl='<select '+attr+'>'+optionList(opt.list||[],val,'空')+'</select>'; break;
+    case 'textarea': ctrl='<textarea '+attr+' rows="2">'+esc(val)+'</textarea>'; break;
+    case 'number': ctrl='<input type="number" step="'+(opt.step||'any')+'" '+attr+' value="'+(val===null||val===undefined?'':val)+'">'; break;
+    default: ctrl='<input type="text" '+attr+' value="'+esc(val)+'">';
+  }
+  return '<div class="field"><label>'+label+'</label>'+ctrl+(opt.note?'<div class="tagline">'+opt.note+'</div>':'')+'</div>';
+}
+function boolHTML(attr,label,val){
+  return '<label class="bool-item"><span>'+label+'</span><input type="checkbox" '+attr+' '+(val?'checked':'')+'><span class="track"></span></label>';
+}
+function parentSelect(cur){
+  let h='<option value=""'+(cur?'':' selected')+'>（无）</option>';
+  let found=false;
+  data.forEach(d=>{ if(d.key===cur) found=true;
+    h+='<option value="'+esc(d.key)+'"'+(d.key===cur?' selected':'')+'>'+esc(d.key+' · '+(d._props.Name||d._name||''))+'</option>'; });
+  if(cur&&!found) h+='<option value="'+esc(cur)+'" selected>'+esc(cur)+'（外部模板）</option>';
+  return '<div class="field"><label>_parent（父级 / 继承模板）</label><select data-root="_parent">'+h+'</select>'
+    +'<div class="tagline">选择已有条目作为父级；留空表示无继承。</div></div>';
+}
+function effRow(section,key,label,arr){
+  const a=arr||zeroEff(); const d='data-eff="'+section+'.'+key+'"';
+  return '<div class="eff-row"><span class="eff-label" title="'+key+'">'+label+'</span>'
+    +'<input type="number" step="any" '+d+' data-idx="0" value="'+a[0]+'">'
+    +'<input type="checkbox" '+d+' data-idx="1" '+(a[1]?'checked':'')+'>'
+    +'<input type="checkbox" '+d+' data-idx="2" '+(a[2]?'checked':'')+'>'
+    +'<input type="number" step="any" '+d+' data-idx="3" value="'+a[3]+'">'
+    +'<input type="number" step="any" '+d+' data-idx="4" value="'+a[4]+'">'
+    +'<input type="number" step="any" '+d+' data-idx="5" value="'+a[5]+'">'
+    +'<input type="number" step="any" '+d+' data-idx="6" value="'+a[6]+'"></div>';
+}
+function effHead(){ return '<div class="eff-head"><span></span><span>数值</span><span>%</span><span>移除</span><span>时间</span><span>持续</span><span>淡出</span><span>消耗</span></div>'; }
+
+/* =========================================================
+   SECTION: 道具说明（仅编辑器可见，不写入导出 JSON）
+   ========================================================= */
+const EFFECT_SECTIONS=[['PositiveEffects',POS_KEYS,'正向效果 PositiveEffects'],['NegativeEffects',NEG_KEYS,'负向效果 NegativeEffects']];
+function fmtNum(n){ const x=Number(n); if(!isFinite(x)) return '0'; return String(Math.round(x*10000)/10000); }
+
+/* 由当前物品数据生成中文说明 */
+function buildItemNote(item){
+  const p=item._props||{}; const L=[];
+  const name=p.Name||item._name||item.key;
+  L.push('【'+name+'】'+(item._type||'物品')+' · 稀有度 '+(p.Rarity||'普通')+' · Key '+item.key);
+
+  const base=['售价 '+fmtNum(p.Price)+' 铜币','最大堆叠 '+fmtNum(p.StackMaxSize),
+    '尺寸 '+fmtNum(p.Width)+'×'+fmtNum(p.Height),'重量 '+fmtNum(p.Weight)+'kg',
+    p.IsSaleable?'可出售':'不可出售',p.IsBuyable?'可购买':'不可购买'];
+  L.push('基础：'+base.join('，')+'。');
+
+  if(p.Slot||p.Stats||p.GemSlots){
+    const s=['装备槽 '+(p.Slot?(SLOT_LABEL[p.Slot]||p.Slot):'无')];
+    if(p.Stats&&Object.keys(p.Stats).length) s.push('属性 '+Object.keys(p.Stats).map(k=>k+' +'+fmtNum(p.Stats[k])).join('、'));
+    if(p.GemSlots) s.push('宝石孔 '+fmtNum(p.GemSlots));
+    if(p.RepairCost) s.push('修理成本 '+fmtNum(p.RepairCost));
+    L.push('装备：'+s.join('，')+'。');
+  }
+  if(p.CapacityGrid&&p.CapacityGrid.w>0&&p.CapacityGrid.h>0)
+    L.push('背包容量：'+fmtNum(p.CapacityGrid.w)+' 列 × '+fmtNum(p.CapacityGrid.h)+' 行。');
+
+  const u=[];
+  if(p.Use&&p.Use.hp) u.push('回复生命 '+fmtNum(p.Use.hp));
+  if(p.Use&&p.Use.mp) u.push('回复魔法 '+fmtNum(p.Use.mp));
+  const cure=(p.CureEffects&&p.CureEffects.length)?p.CureEffects:((p.Use&&Array.isArray(p.Use.cure))?p.Use.cure:[]);
+  if(cure.length) u.push('治疗 '+cure.join('、'));
+  if(u.length) L.push('使用：'+u.join('，')+'。');
+
+  const t=['效果类型 '+(p.ItemEffectType||'作用期间'),'作用时间 '+fmtNum(p.ItemUseTime)+' 秒'];
+  if(p.MaxHpResource) t.push('HP 池 '+fmtNum(p.MaxHpResource)+'（每秒 '+fmtNum(p.HpResourceRate)+'）');
+  if(p.MaxMpResource) t.push('MP 池 '+fmtNum(p.MaxMpResource)+'（每秒 '+fmtNum(p.MpResourceRate)+'）');
+  t.push('冷却 '+fmtNum(p.Cooldown)+' 秒');
+  if(p.AutoUseEnabled) t.push('自动使用 开');
+  if(p.TriggerCondition&&p.TriggerCondition!=='HP') t.push('触发条件 '+p.TriggerCondition);
+  L.push('作用期间：'+t.join('，')+'。');
+
+  L.push('');
+  EFFECT_SECTIONS.forEach(function(sec){
+    L.push(sec[2]+'：');
+    sec[1].forEach(function(pair){
+      const a=normEff(p[sec[0]]&&p[sec[0]][pair[0]]);
+      L.push('  · '+pair[1]+' = 数值 '+fmtNum(a[0])+'，% '+(a[1]?'是':'否')+'，移除 '+(a[2]?'是':'否')
+        +'，时间 '+fmtNum(a[3])+'，持续 '+fmtNum(a[4])+'，淡出 '+fmtNum(a[5])+'，消耗 '+fmtNum(a[6]));
+    });
+  });
+
+  const m=[];
+  if(p.MaterialType) m.push('材料类型 '+p.MaterialType);
+  if(p.Tier&&p.Tier!==1) m.push('层级 '+fmtNum(p.Tier));
+  if(p.Tags&&p.Tags.length) m.push('标签 '+p.Tags.join('、'));
+  if(m.length){ L.push(''); L.push('材料：'+m.join('，')+'。'); }
+  if(p.Description&&String(p.Description).trim()){ L.push(''); L.push('描述：'+String(p.Description).trim()); }
+  return L.join('\n');
+}
+
+/* 文本解析工具 */
+function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\' + '$' + '&'); }
+function pickNum(line,name,dflt){ const m=line.match(new RegExp(escRe(name)+'\\s*[:=＝]?\\s*(-?\\d+(?:\\.\\d+)?)')); return m?Number(m[1]):dflt; }
+function pickBool(line,name,dflt){ const m=line.match(new RegExp(escRe(name)+'\\s*[:=＝]?\\s*(是|否|开|关|有|无|真|假|true|false|1|0)','i')); return m?/^(是|开|有|真|true|1)$/i.test(m[1]):dflt; }
+function isEffLine(l){ return /^\s*[·•\-\*]\s*\S/.test(l); }
+
+/* 把说明文本回写到物品数据 */
+function applyNote(item,text){
+  const p=item._props; const lines=String(text||'').split(/\r?\n/);
+  const effLines=lines.filter(isEffLine);
+  const plain=lines.filter(function(l){return !isEffLine(l);}).join('\n');
+  const res={pos:0,neg:0,zeroed:0,fields:[],missing:[]};
+
+  EFFECT_SECTIONS.forEach(function(sec){
+    const secName=sec[0], keys=sec[1];
+    if(!p[secName]||typeof p[secName]!=='object') p[secName]=defaultEffects(keys.map(function(x){return x[0];}));
+    keys.forEach(function(pair){
+      const k=pair[0], label=pair[1];
+      let line=null;
+      for(let i=0;i<effLines.length;i++){ const l=effLines[i]; if(l.indexOf(label)!==-1||l.indexOf(k)!==-1) line=l; }
+      const a=zeroEff();
+      if(line){
+        a[0]=pickNum(line,'数值',0);
+        a[1]=pickBool(line,'%',false);
+        a[2]=pickBool(line,'移除',false);
+        a[3]=pickNum(line,'时间',0);
+        a[4]=pickNum(line,'持续',0);
+        a[5]=pickNum(line,'淡出',0);
+        a[6]=pickNum(line,'消耗',0);
+      } else res.missing.push(label);
+      p[secName][k]=a;
+      const live=a.some(function(v,i){ return (i===1||i===2)?!!v:Number(v)!==0; });
+      if(live){ if(secName==='PositiveEffects') res.pos++; else res.neg++; } else res.zeroed++;
+    });
+  });
+
+  const changed=[];
+  function tryField(re,label,fn){ const m=plain.match(re); if(!m) return; fn(m); changed.push(label); }
+  tryField(/(?:售价|价格)\s*[:=＝]?\s*(-?\d+(?:\.\d+)?)/,'售价',function(m){ p.Price=Math.max(0,Math.floor(Number(m[1]))); });
+  tryField(/最大堆叠\s*[:=＝]?\s*(-?\d+(?:\.\d+)?)/,'最大堆叠',function(m){ p.StackMaxSize=Math.max(1,Math.floor(Number(m[1]))); });
+  tryField(/作用时间\s*[:=＝]?\s*(-?\d+(?:\.\d+)?)/,'作用时间',function(m){ p.ItemUseTime=Math.max(0,Number(m[1])); });
+  tryField(/冷却\s*[:=＝]?\s*(-?\d+(?:\.\d+)?)/,'冷却',function(m){ p.Cooldown=Math.max(0,Number(m[1])); });
+  tryField(/回复生命\s*[:=＝]?\s*(-?\d+(?:\.\d+)?)/,'回复生命',function(m){
+    const n=Number(m[1]); if(!p.Use) p.Use={}; if(n>0) p.Use.hp=n; else delete p.Use.hp;
+    if(!Object.keys(p.Use).length) p.Use=null; });
+  tryField(/回复魔法\s*[:=＝]?\s*(-?\d+(?:\.\d+)?)/,'回复魔法',function(m){
+    const n=Number(m[1]); if(!p.Use) p.Use={}; if(n>0) p.Use.mp=n; else delete p.Use.mp;
+    if(!Object.keys(p.Use).length) p.Use=null; });
+  tryField(/治疗\s*[:=＝]?\s*([^\n。；;]+)/,'治疗',function(m){
+    const arr=m[1].split(/[、,，\/\s]+/).map(function(s){return s.trim();}).filter(Boolean);
+    p.CureEffects=arr; if(!p.Use) p.Use={}; if(arr.length) p.Use.cure=arr.slice(); else delete p.Use.cure;
+    if(!Object.keys(p.Use).length) p.Use=null; });
+  res.fields=changed;
+  return res;
+}
+
+function noteResultText(res){
+  let s='已应用：正向效果 '+res.pos+' 项生效、负向效果 '+res.neg+' 项生效';
+  if(res.zeroed) s+='；其余 '+res.zeroed+' 项为零值';
+  if(res.missing.length) s+='；文本中未出现的效果已清零（'+res.missing.slice(0,6).join('、')+(res.missing.length>6?' 等':'')+'）';
+  if(res.fields.length) s+='；同时更新字段：'+res.fields.join('、');
+  return s+'。';
+}
+
+function syncNote(item,force){
+  if(!item) return;
+  const ta=detail.querySelector('[data-note]'); if(!ta) return;
+  if(!force){
+    if(!item._uiNoteAuto) return;
+    if(item._uiNoteDirty) return;
+    if(document.activeElement===ta) return;
+  }
+  const txt=buildItemNote(item);
+  item._uiNote=txt; item._uiNoteDirty=false; ta.value=txt; save();
+}
+function showNoteResult(text,warn){
+  const box=detail.querySelector('[data-note-result]'); if(!box) return;
+  box.textContent=text||''; box.classList.toggle('warn',!!warn);
+}
+
+/* 说明面板 HTML */
+function notePanel(item){
+  const txt=item._uiNote?item._uiNote:buildItemNote(item);
+  item._uiNote=txt;
+  return '<div class="notebox">'
+    +'<div class="notebar">'
+    +'<label class="chk"><input type="checkbox" data-note-auto '+(item._uiNoteAuto?'checked':'')+'> 随编辑自动更新</label>'
+    +'<button type="button" data-act="note-regen">重新生成</button>'
+    +'<button type="button" data-act="note-apply">解析文本 → 应用到物品</button>'
+    +'</div>'
+    +'<textarea class="notearea" data-note="1" rows="16" spellcheck="false">'+esc(txt)+'</textarea>'
+    +'<div class="tagline">中文说明本物品的效果，仅保存在浏览器本地，<b>不会导出到 JSON</b>。以「·」开头的行对应效果矩阵的 7 项（数值 / % / 移除 / 时间 / 持续 / 淡出 / 消耗）；改完点「解析文本 → 应用到物品」即可回写。<b>以文本为准</b>：未列出的效果会被清零。</div>'
+    +'<div class="noteresult" data-note-result></div>'
+    +'</div>';
+}
+
+/* =========================================================
+   详情渲染
+   ========================================================= */
+function renderDetail(){
+  const item=currentItem();
+  if(!item){ detail.innerHTML='<p class="hint">← 从左侧选择一条物品进行编辑</p>'; return; }
+  const p=item._props; let h='';
+
+  h+='<div class="section-title">基本信息</div>';
+  h+=field('Key（对象键）','data-root="key"',item.key);
+  h+='<div class="grid2">'+field('_id（标识）','data-root="_id"',item._id)+parentSelect(item._parent)+'</div>';
+  h+=field('_name（名称）','data-root="_name"',item._name);
+  h+=field('_type（类型）','data-root="_type"',item._type,{kind:'select',list:TYPE_OPTIONS});
+  h+=boolHTML('data-root="_debugSample"','_debugSample（调试样例）',item._debugSample);
+
+  /* SECTION: 道具说明面板（仅编辑器） */
+  h+='<div class="section-title">道具说明（仅编辑器可见，不导出）</div>';
+  h+=notePanel(item);
+
+  h+='<div class="section-title">名称与描述</div>';
+  h+='<div class="grid2">'+field('Name（名称）','data-prop="Name"',p.Name)+field('ShortName（短名称）','data-prop="ShortName"',p.ShortName)+'</div>';
+  h+=field('Description（描述）','data-prop="Description"',p.Description,{kind:'textarea'});
+
+  h+='<div class="section-title">价格 · 稀有度 · 尺寸 · 堆叠</div>';
+  h+='<div class="grid2">'
+    +field('Rarity（稀有度）','data-prop="Rarity"',p.Rarity,{kind:'select',list:RARITY_OPTIONS})
+    +field('Price（价格，铜币）','data-prop="Price"',p.Price,{kind:'number',step:'1'})
+    +field('StackMaxSize（最大堆叠）','data-prop="StackMaxSize"',p.StackMaxSize,{kind:'number',step:'1'})
+    +field('Weight（重量 kg）','data-prop="Weight"',p.Weight,{kind:'number'})
+    +field('Width（宽）','data-prop="Width"',p.Width,{kind:'number',step:'1'})
+    +field('Height（高）','data-prop="Height"',p.Height,{kind:'number',step:'1'})
+    +'</div>';
+
+  h+='<div class="section-title">标记</div>';
+  h+='<div class="grid2">'+boolHTML('data-prop="IsSaleable"','IsSaleable（可出售）',p.IsSaleable)+boolHTML('data-prop="IsBuyable"','IsBuyable（可购买）',p.IsBuyable)+'</div>';
+
+  h+='<div class="section-title">装备</div>';
+  h+=field('Slot（装备槽）','data-prop="Slot"',p.Slot||'',{kind:'select',list:SLOT_OPTIONS.filter(Boolean)});
+  h+='<div class="mini" style="margin-bottom:4px">Stats（属性加成，留空或 0 不导出）</div><div class="grid4">';
+  STAT_KEYS.forEach(k=>{ const v=p.Stats&&p.Stats[k]!==undefined?p.Stats[k]:'';
+    h+='<div class="field"><label>'+STAT_LABEL[k]+'</label><input type="number" step="any" data-stat="'+k+'" value="'+v+'"></div>'; });
+  h+='</div>';
+
+  h+='<div class="section-title">背包容量 CapacityGrid</div>';
+  h+='<div class="mini" style="margin-bottom:4px">仅 Slot=bag 时生效；w/h 都 &gt; 0 才导出。</div><div class="grid2">'
+    +'<div class="field"><label>w（列）</label><input type="number" step="1" min="0" data-cap="w" value="'+(p.CapacityGrid?p.CapacityGrid.w:'')+'"></div>'
+    +'<div class="field"><label>h（行）</label><input type="number" step="1" min="0" data-cap="h" value="'+(p.CapacityGrid?p.CapacityGrid.h:'')+'"></div></div>';
+
+  h+='<div class="section-title">耐久与修理 · 宝石孔位</div>';
+  h+='<div class="note">耐久是<b>实例属性</b>（0~100%，掉落随机 55~100），不存于表内；这里只配置修理与孔位。计价 = max(1, round(原价×耐久÷100))。</div>';
+  h+='<div class="grid3">'
+    +field('GemSlots（宝石孔位数）','data-prop="GemSlots"',p.GemSlots,{kind:'number',step:'1',note:'装备可镶嵌宝石数'})
+    +field('RepairCost（维修成本）','data-prop="RepairCost"',p.RepairCost,{kind:'number',note:'按缺失耐久收费的基准'})
+    +field('RepairSpeed（维修速度）','data-prop="RepairSpeed"',p.RepairSpeed,{kind:'number'})
+    +'</div>';
+
+  h+='<div class="section-title">AllowedContainers（允许放入的容器）</div><div class="chk-grid">';
+  CONTAINER_OPTIONS.forEach(c=>{ const on=(p.AllowedContainers||[]).includes(c);
+    h+='<label class="chk"><input type="checkbox" data-cont="'+c+'" '+(on?'checked':'')+'> '+CONTAINER_LABEL[c]+'</label>'; });
+  h+='</div>';
+
+  h+='<div class="section-title">Use（使用效果）</div><div class="grid3">'
+    +'<div class="field"><label>hp（回复生命）</label><input type="number" step="1" data-use="hp" value="'+(p.Use&&p.Use.hp!==undefined?p.Use.hp:'')+'"></div>'
+    +'<div class="field"><label>mp（回复魔法）</label><input type="number" step="1" data-use="mp" value="'+(p.Use&&p.Use.mp!==undefined?p.Use.mp:'')+'"></div></div>';
+  h+=field('cure（解除状态，逗号分隔）','data-use="cure"',(p.Use&&Array.isArray(p.Use.cure)?p.Use.cure.join(', '):''));
+  h+='<div class="tagline">可选：'+CURE_OPTIONS.join('、')+'</div>';
+
+  /* --- 自动使用与触发（3 的 AutoUse + 2 的延时/触发） --- */
+  h+='<div class="section-title">自动使用与触发</div>';
+  h+='<div class="grid2">'
+    +boolHTML('data-prop="AutoUseEnabled"','AutoUse / AutoUseEnabled（自动使用）',p.AutoUseEnabled)
+    +boolHTML('data-prop="PreDelayEnabled"','PreDelayEnabled（使用前延迟）',p.PreDelayEnabled)
+    +boolHTML('data-prop="PostDelayEnabled"','PostDelayEnabled（使用后延迟）',p.PostDelayEnabled)
+    +'</div>';
+  h+='<div class="grid3">'
+    +field('AutoUseDelay（自动使用延时）','data-prop="AutoUseDelay"',p.AutoUseDelay,{kind:'number'})
+    +field('PreUseDelay（使用前延时）','data-prop="PreUseDelay"',p.PreUseDelay,{kind:'number'})
+    +field('PostUseDelay（使用后延时）','data-prop="PostUseDelay"',p.PostUseDelay,{kind:'number'})
+    +'</div>';
+  h+='<div class="grid2">'
+    +field('TriggerCondition（触发条件）','data-prop="TriggerCondition"',p.TriggerCondition,{kind:'select',list:['HP','MP','Always']})
+    +field('TriggerConditionValue（触发条件数值）','data-prop="TriggerConditionValue"',p.TriggerConditionValue,{kind:'number'})
+    +'</div>';
+  h+='<div class="grid3">'
+    +field('hpBelow（HP 低于 %）','data-auto="hpBelowPct"',(p.AutoUse&&p.AutoUse.hpBelow!==undefined?+(p.AutoUse.hpBelow*100).toFixed(2):''),{kind:'number'})
+    +field('mpBelow（MP 低于 %）','data-auto="mpBelowPct"',(p.AutoUse&&p.AutoUse.mpBelow!==undefined?+(p.AutoUse.mpBelow*100).toFixed(2):''),{kind:'number'})
+    +field('cooldownSec（冷却 秒）','data-auto="cooldownSec"',(p.AutoUse&&p.AutoUse.cooldownSec!==undefined?p.AutoUse.cooldownSec:''),{kind:'number'})
+    +'</div>';
+
+  /* --- 作用期间（2） --- */
+  h+='<div class="section-title">作用期间</div>';
+  h+='<div class="grid2">'
+    +field('ItemEffectType（物品效果类型）','data-prop="ItemEffectType"',p.ItemEffectType,{kind:'select',list:['立即','作用期间','持续']})
+    +field('ItemUseTime（物品作用时间）','data-prop="ItemUseTime"',p.ItemUseTime,{kind:'number'})
+    +field('MaxHpResource（HP 池总量）','data-prop="MaxHpResource"',p.MaxHpResource,{kind:'number'})
+    +field('HpResourceRate（HP 每秒速率）','data-prop="HpResourceRate"',p.HpResourceRate,{kind:'number'})
+    +field('MaxMpResource（MP 池总量）','data-prop="MaxMpResource"',p.MaxMpResource,{kind:'number'})
+    +field('MpResourceRate（MP 每秒速率）','data-prop="MpResourceRate"',p.MpResourceRate,{kind:'number'})
+    +field('Cooldown（使用冷却 秒）','data-prop="Cooldown"',p.Cooldown,{kind:'number'})
+    +field('CureEffects（解除异常，逗号分隔）','data-cure="1',(p.CureEffects||[]).join(', '))
+    +'</div>';
+  h+='<div class="note">资源模型：立即=ItemUseTime 0；作用期间/持续=ItemUseTime&gt;0。HP 池用 MaxHpResource/HpResourceRate，MP 池用 MaxMpResource/MpResourceRate（可并存）。满血/满蓝不浪费池（按实际回复扣池），池耗尽或 ItemUseTime 到期才结束。Use.hp/mp 仅作瞬时值，勿与池重复填写。</div>';
+
+  /* --- 正 / 负向效果矩阵（2） --- */
+  h+='<div class="section-title">正向效果 PositiveEffects</div>'+effHead();
+  POS_KEYS.forEach(([k,label])=>{ h+=effRow('PositiveEffects',k,label,p.PositiveEffects[k]); });
+  h+='<div class="section-title">负向效果 NegativeEffects</div>'+effHead();
+  NEG_KEYS.forEach(([k,label])=>{ h+=effRow('NegativeEffects',k,label,p.NegativeEffects[k]); });
+
+  /* SECTION: 效果矩阵字段说明 */
+  h+='<details class="legend"><summary>效果矩阵 7 列含义（点击展开）</summary><table><tbody>'
+    +'<tr><td>数值</td><td>对应效果数值</td></tr>'
+    +'<tr><td>%</td><td>数值是否为百分比</td></tr>'
+    +'<tr><td>移除</td><td>是否可以移除该效果</td></tr>'
+    +'<tr><td>时间</td><td>作用时间</td></tr>'
+    +'<tr><td>持续</td><td>持续效果</td></tr>'
+    +'<tr><td>淡出</td><td>对应效果从 100% 减少到 0% 的时间</td></tr>'
+    +'<tr><td>消耗</td><td>扣除的 HpResource</td></tr>'
+    +'</tbody></table><div style="margin-top:6px">导出时 PositiveEffects / NegativeEffects 两块<b>始终完整输出</b>（12 项正向 + 10 项负向，每项 7 个值），即使全部为零也不会被省略。</div></details>';
+
+  h+='<div class="section-title">材料 · 层级 · 标签</div><div class="grid3">'
+    +field('MaterialType（材料类型）','data-prop="MaterialType"',p.MaterialType||'')
+    +field('Tier（层级）','data-prop="Tier"',p.Tier,{kind:'number',step:'1'})+'</div>';
+  h+=field('Tags（标签，逗号分隔）','data-tags="1"',(p.Tags||[]).join(', '));
+
+  detail.innerHTML=h;
+}
+
+/* =========================================================
+   编辑事件
+   ========================================================= */
+function applyEdit(e){
+  const el=e.target, item=currentItem(); if(!item) return;
+  const p=item._props;
+
+  /* SECTION: 道具说明输入（只暂存，不自动回写；手动编辑后关闭自动更新） */
+  if(el.dataset && el.dataset.note){
+    item._uiNote=el.value; item._uiNoteDirty=true;
+    if(item._uiNoteAuto){
+      item._uiNoteAuto=false;
+      const cb=detail.querySelector('[data-note-auto]'); if(cb) cb.checked=false;
+      showNoteResult('已切换为手动模式：说明不再随字段自动覆盖。改完点「解析文本 → 应用到物品」回写，或点「重新生成」放弃手改。',true);
+    }
+    save(); return;
+  }
+  if(el.dataset && el.dataset.noteAuto!==undefined){ item._uiNoteAuto=el.checked; item._uiNoteDirty=!el.checked; if(el.checked){ item._uiNoteDirty=false; syncNote(item,true); showNoteResult('已开启自动更新，说明按当前字段重新生成。'); } save(); return; }
+
+  /* 效果矩阵 */
+  if(el.dataset.eff){
+    const parts=el.dataset.eff.split('.'); const sec=parts[0],key=parts[1]; const idx=Number(el.dataset.idx);
+    const arr=p[sec]&&p[sec][key]; if(!arr) return;
+    if(el.type==='checkbox') arr[idx]=el.checked;
+    else { if(el.value==='') arr[idx]=0; else { const n=Number(el.value); if(!isNaN(n)) arr[idx]=n; } }
+    save(); return;
+  }
+
+  if(el.dataset.root){
+    const k=el.dataset.root;
+    if(k==='key'){
+      if(e.type!=='change') return;
+      const nv=String(el.value).trim();
+      if(!nv){ el.value=item.key; return; }
+      if(nv===item.key) return;
+      if(data.some(d=>d!==item&&d.key===nv)){ alert('Key 已存在：'+nv); el.value=item.key; return; }
+      item.key=nv; selectedKey=nv; renderList(); save(); return;
+    }
+    if(k==='_debugSample') item._debugSample=el.checked;
+    else item[k]=el.value;
+    renderList(); save(); return;
+  }
+
+  if(el.dataset.prop){
+    const k=el.dataset.prop;
+    if(el.type==='checkbox') p[k]=el.checked;
+    else if(el.type==='number'){ if(el.value==='') p[k]=0; else { const n=Number(el.value); if(!isNaN(n)) p[k]=n; } }
+    else p[k]=el.value===''?null:el.value;
+    renderList(); save(); return;
+  }
+
+  if(el.dataset.stat){
+    const k=el.dataset.stat; if(!p.Stats) p.Stats={};
+    if(el.value==='') delete p.Stats[k];
+    else { const n=Number(el.value); if(!isNaN(n)){ if(n===0) delete p.Stats[k]; else p.Stats[k]=n; } }
+    if(Object.keys(p.Stats).length===0) p.Stats=null;
+    save(); return;
+  }
+  if(el.dataset.cap){
+    const k=el.dataset.cap; if(!p.CapacityGrid) p.CapacityGrid={w:0,h:0};
+    p.CapacityGrid[k]=el.value===''?0:Math.max(0,Math.floor(Number(el.value)||0));
+    if(!(p.CapacityGrid.w>0&&p.CapacityGrid.h>0)) p.CapacityGrid=null;
+    save(); return;
+  }
+  if(el.dataset.cont){
+    const c=el.dataset.cont; let arr=Array.isArray(p.AllowedContainers)?p.AllowedContainers.slice():[];
+    if(el.checked){ if(!arr.includes(c)) arr.push(c); } else arr=arr.filter(x=>x!==c);
+    p.AllowedContainers=CONTAINER_OPTIONS.filter(x=>arr.includes(x));
+    save(); return;
+  }
+  if(el.dataset.use){
+    const k=el.dataset.use; if(!p.Use) p.Use={};
+    if(k==='cure'){ const arr=String(el.value).split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean); if(arr.length) p.Use.cure=arr; else delete p.Use.cure; }
+    else { if(el.value===''||Number(el.value)<=0) delete p.Use[k]; else p.Use[k]=Number(el.value); }
+    if(Object.keys(p.Use).length===0) p.Use=null;
+    save(); return;
+  }
+  if(el.dataset.auto){
+    const k=el.dataset.auto; if(!p.AutoUse) p.AutoUse={};
+    if(k==='hpBelowPct'||k==='mpBelowPct'){ const key=k==='hpBelowPct'?'hpBelow':'mpBelow';
+      if(el.value===''||Number(el.value)<=0) delete p.AutoUse[key]; else p.AutoUse[key]=clamp(Number(el.value)/100,0,1); }
+    else if(k==='cooldownSec'){ if(el.value===''||Number(el.value)<=0) delete p.AutoUse.cooldownSec; else p.AutoUse.cooldownSec=Number(el.value); }
+    if(Object.keys(p.AutoUse).length===0) p.AutoUse=null;
+    save(); return;
+  }
+  if(el.dataset.cure){ p.CureEffects=String(el.value).split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean); save(); return; }
+  if(el.dataset.tags){ p.Tags=String(el.value).split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean); save(); return; }
+}
+function onEdit(e){
+  const r=applyEdit(e);
+  const it=currentItem(); if(it) syncNote(it);
+  return r;
+}
+detail.addEventListener('input',onEdit);
+detail.addEventListener('change',onEdit);
+
+/* SECTION: 道具说明按钮 */
+detail.addEventListener('click',function(e){
+  const btn=e.target.closest('[data-act]'); if(!btn) return;
+  const item=currentItem(); if(!item) return;
+  const act=btn.dataset.act;
+  if(act==='note-regen'){
+    item._uiNoteDirty=false; syncNote(item,true);
+    showNoteResult('已按当前字段重新生成说明。');
+  } else if(act==='note-apply'){
+    const ta=detail.querySelector('[data-note]'); if(!ta) return;
+    let res;
+    try{ res=applyNote(item,ta.value); }
+    catch(err){ showNoteResult('解析失败：'+err.message,true); return; }
+    item._uiNoteDirty=false;
+    save(); renderList(); renderDetail();
+    showNoteResult(noteResultText(res));
+  }
+});
+listBody.addEventListener('click',e=>{ const tr=e.target.closest('tr'); if(!tr) return; if(tr.dataset.key===selectedKey) return; selectedKey=tr.dataset.key; renderList(); renderDetail(); });
+
+/* =========================================================
+   新增 / 复制 / 删除
+   ========================================================= */
+function nextKey(){ let max=100000; data.forEach(d=>{ const n=Number(d.key); if(isFinite(n)&&n>max) max=n; }); return String(max+1); }
+function nextId(){ let max=0; data.forEach(d=>{ if(/^\d+$/.test(d._id)) max=Math.max(max,parseInt(d._id,10)); }); return String(max+1).padStart(6,'0'); }
+document.getElementById('addBtn').onclick=()=>{ const key=nextKey();
+  const it=normalizeEntry(key,{_id:nextId(),_name:'新物品',_parent:'0001',_type:'物品',
+    _props:{Name:'新物品',ShortName:'新物品',StackMaxSize:99,Price:0,AllowedContainers:['bag','storage','pocket','hotbar']}});
+  data.push(it); selectedKey=it.key; renderList(); renderDetail(); save(); };
+document.getElementById('dupBtn').onclick=()=>{ const src=currentItem(); if(!src) return;
+  const copy=JSON.parse(JSON.stringify(src)); copy.key=nextKey(); copy._id=nextId();
+  copy._name=(copy._name||'')+'_副本'; copy._props.Name=(copy._props.Name||'')+' 副本';
+  copy._uiNote=''; copy._uiNoteDirty=false; copy._uiNoteAuto=true;
+  const at=data.indexOf(src); data.splice(at+1,0,copy); selectedKey=copy.key; renderList(); renderDetail(); save(); };
+document.getElementById('delBtn').onclick=()=>{ if(!selectedKey) return; if(!confirm('确认删除 '+selectedKey+' ?')) return;
+  const idx=data.findIndex(d=>d.key===selectedKey); if(idx<0) return; data.splice(idx,1);
+  selectedKey=data.length?data[Math.min(idx,data.length-1)].key:null; renderList(); renderDetail(); save(); };
+
+/* =========================================================
+   导入 / 导出
+   ========================================================= */
+document.getElementById('importBtn').onclick=()=>document.getElementById('importInput').click();
+document.getElementById('importInput').onchange=e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{ try{
+    const obj=JSON.parse(ev.target.result);
+    if(Array.isArray(obj)) data=obj.map((x,i)=>normalizeEntry(x.key!=null?x.key:String(i),x));
+    else if(obj&&typeof obj==='object') data=Object.keys(obj).map(k=>normalizeEntry(k,obj[k]));
+    else throw new Error('根节点必须是对象或数组');
+    selectedKey=data.length?data[0].key:null; renderList(); renderDetail(); save();
+  }catch(err){ alert('导入失败：'+err.message); } };
+  reader.readAsText(file); e.target.value='';
+};
+function indentBlock(str,level){ const pad='  '.repeat(level); return str.split('\n').map((l,i)=>i===0?l:pad+l).join('\n'); }
+function fullEffects(sec,keys){
+  const o={}; const src=(sec&&typeof sec==='object')?sec:{};
+  keys.forEach(function(pair){ o[pair[0]]=normEff(src[pair[0]]); });
+  return o;
+}
+function buildPropsForExport(p){
+  const out={};
+  PROPS_ORDER.forEach(k=>{
+    /* 效果矩阵始终完整导出（全零也保留 12+10 项 × 7 值） */
+    if(k==='PositiveEffects'){ out[k]=fullEffects(p[k],POS_KEYS); return; }
+    if(k==='NegativeEffects'){ out[k]=fullEffects(p[k],NEG_KEYS); return; }
+    const v=p[k]; if(v===undefined||v===null) return;
+    if(k==='Stats'&&(!v||!Object.keys(v).length)) return;
+    if(k==='CapacityGrid'&&(!v||!(v.w>0&&v.h>0))) return;
+    if(k==='Use'&&(!v||!Object.keys(v).length)) return;
+    if(k==='AutoUse'&&(!v||!Object.keys(v).length)) return;
+    if(k==='Tags'&&(!v||!v.length)) return;
+    if(k==='AllowedContainers'&&(!v||!v.length)) return;
+    if(k==='GemSlots'&&!v) return;
+    if((k==='MaxMpResource'||k==='MpResourceRate'||k==='Cooldown')&&!v) return;
+    if(k==='CureEffects'&&(!v||!v.length)) return;
+    if(k==='Description'&&!String(v).trim()) return;
+    out[k]=v;
+  });
+  Object.keys(p).forEach(k=>{ if(!(k in out)&&k!=='PositiveEffects'&&k!=='NegativeEffects') out[k]=p[k]; });
+  return out;
+}
+function buildJSONText(){
+  const parts=data.map(d=>{
+    const entry={_id:d._id,_name:d._name,_parent:d._parent,_type:d._type};
+    if(d._debugSample) entry._debugSample=true;
+    entry._props=buildPropsForExport(d._props);
+    Object.keys(d).forEach(k=>{ if(!(k in entry)&&k!=='_props'&&k.indexOf('_ui')!==0) entry[k]=d[k]; });
+    return '  '+JSON.stringify(d.key)+': '+indentBlock(JSON.stringify(entry,null,2),1);
+  });
+  return '{\n'+parts.join(',\n')+'\n}';
+}
+document.getElementById('exportBtn').onclick=()=>{
+  const blob=new Blob([buildJSONText()],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='items.json'; a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* =========================================================
+   筛选事件 / 初始化
+   ========================================================= */
+searchInput.addEventListener('input',renderList);
+[fType,fRarity,fSlot,fContainer].forEach(el=>el.addEventListener('change',renderList));
+document.querySelectorAll('[data-tri]').forEach(btn=>{
+  const st={key:btn.dataset.tri,state:'all',btn}; triStates.push(st);
+  btn.addEventListener('click',()=>{ st.state=st.state==='all'?'on':(st.state==='on'?'off':'all');
+    btn.dataset.state=st.state; btn.querySelector('.tri-val').textContent=st.state==='all'?'全部':(st.state==='on'?'是':'否'); renderList(); });
+});
+document.getElementById('resetFilter').onclick=()=>{ searchInput.value=''; fType.value='';fRarity.value='';fSlot.value='';fContainer.value='';
+  triStates.forEach(t=>{t.state='all';t.btn.dataset.state='all';t.btn.querySelector('.tri-val').textContent='全部';}); renderList(); };
+
+(function init(){
+  fillFilters();
+  const raw=localStorage.getItem(LS_KEY);
+  if(raw){ try{ const parsed=JSON.parse(raw); data=Array.isArray(parsed)?parsed.map(d=>normalizeEntry(d.key,d)):defaultData(); }catch(_){ data=defaultData(); } }
+  else data=defaultData();
+  if(!data.length) data=defaultData();
+  selectedKey=data[0].key;
+  updateSortMarks();
+  renderList(); renderDetail();
+})();
+
+})();
+</script>
+</body>
+</html>

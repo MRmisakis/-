@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Equipment Slots 编辑器 · 骨架版</title>
+<style>
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{
+    display:flex;gap:8px;align-items:center;padding:10px 14px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  header h1{font-size:15px;margin:0 12px 0 0;color:var(--text-strong);font-weight:normal}
+  button{
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px;
+  }
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select{
+    background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);
+    padding:5px 8px;font-family:inherit;font-size:13px;width:100%;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  #searchInput{width:190px}
+  .stat{color:var(--text-dim);font-size:12px;margin-left:auto}
+  .stat .ok{color:var(--gain)}
+  .stat .err{color:var(--danger)}
+
+  .toolbar{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding:8px 14px;background:#161616;border-bottom:1px solid var(--line);
+    font-size:12px;
+  }
+  .toolbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim)}
+  .toolbar .fsep{width:1px;height:18px;background:var(--line)}
+  .toolbar .hint{color:var(--text-dim);font-size:11px}
+  .toolbar .ok{color:var(--gain)}
+  .toolbar .miss{color:var(--danger)}
+  .mini{
+    font-size:11px;padding:3px 9px;background:#0E0E0E;
+    border:1px solid var(--line);color:var(--accent);cursor:pointer;font-family:inherit;
+  }
+  .mini:hover{border-color:var(--accent)}
+
+  main{flex:1;display:flex;min-height:0}
+  .left{flex:1;min-width:0;overflow:auto;border-right:1px solid var(--line)}
+  .right{width:560px;flex:none;overflow:auto;padding:14px;background:var(--panel)}
+
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{
+    position:sticky;top:0;background:var(--panel2);color:var(--text-dim);
+    font-weight:normal;font-size:12px;z-index:1;
+  }
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.selected{background:#1A2A3A}
+  tbody tr.dragging{opacity:.35}
+  tbody tr.drop-before td{border-top:2px solid var(--accent)}
+  tbody tr.drop-after td{border-bottom:2px solid var(--accent)}
+  td.drag{cursor:grab;color:#4a4a4a;text-align:center;user-select:none;width:26px}
+  td.drag:active{cursor:grabbing}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .dim{color:var(--text-dim)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+  .miss{color:var(--danger)}
+
+  .field{margin-bottom:9px}
+  .field label{display:block;color:var(--text-dim);font-size:12px;margin-bottom:3px}
+  .field-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:3px}
+  .field-head label{margin:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .section-title{
+    color:var(--accent);font-size:13px;margin:18px 0 10px;
+    border-bottom:1px solid var(--line);padding-bottom:4px;
+  }
+  .section-title:first-child{margin-top:0}
+
+  .tagline{font-size:11px;color:var(--text-dim);margin-top:3px}
+  .tag{
+    display:inline-block;font-size:11px;color:#9EC6FF;
+    background:#1B2436;border:1px solid #2B3A55;border-radius:5px;padding:1px 6px;
+  }
+  .tag.ok{color:var(--gain);border-color:#2A5A3A;background:#0F1A12}
+  .tag.warn{color:#E0A050;border-color:#5A4A2A;background:#1A150F}
+  .tag.bad{color:var(--danger);border-color:#5A2C2C;background:#1A0F0F}
+
+  .check-panel{
+    margin-top:10px;padding:8px 10px;border-radius:4px;
+    background:#0F1A22;border:1px solid #1E3A4A;font-size:12px;color:#7FCFFF;
+  }
+  .check-panel b{color:#BFE8FF}
+  .check-panel .err{color:#E07A7A}
+  .check-panel .ok{color:#5FE0A0}
+  .check-panel .warn{color:#E0A050}
+  .check-panel .row{margin:3px 0}
+
+  .danger-zone{
+    margin-top:18px;padding:10px 12px;border-radius:4px;
+    background:#1A0F0F;border:1px solid #5A2C2C;
+  }
+  .danger-zone h3{
+    margin:0 0 6px;font-size:12px;color:var(--danger);font-weight:normal;
+  }
+  .danger-zone p{margin:0 0 8px;font-size:11.5px;color:#C08080}
+
+  .inline-flex{display:flex;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Equipment Slots 编辑器 · 骨架版</h1>
+  <button id="addBtn">＋ 新增槽位</button>
+  <button id="importBtn">导入 JSON</button>
+  <button id="exportBtn">导出 JSON</button>
+  <button id="resetBtn" class="danger">重置为骨架</button>
+  <input type="text" id="searchInput" placeholder="搜索 Key / 显示名">
+  <span class="stat" id="stat"></span>
+</header>
+
+<div class="toolbar">
+  <label>Items 参考
+    <button id="loadItemsBtn" class="mini">加载 items.json</button>
+    <button id="clearItemsBtn" class="mini" disabled>清除参考</button>
+    <input type="file" id="itemsFile" accept=".json" hidden>
+  </label>
+  <span id="itemsStatus" class="hint">未加载</span>
+  <span class="fsep"></span>
+  <button id="revalidateBtn" class="mini">重新校验</button>
+  <span class="hint">不加载也能编辑；加载 items.json 后可校验 <code>_props.Slot</code> 引用与 <code>weapon</code> 别名映射。</span>
+</div>
+
+<main>
+  <div class="left">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Key（槽位 id）</th>
+          <th>显示名</th>
+          <th class="num">引用 items</th>
+          <th>别名</th>
+        </tr>
+      </thead>
+      <tbody id="listBody"></tbody>
+    </table>
+  </div>
+  <div class="right" id="detail"></div>
+</main>
+
+<input type="file" id="importInput" accept=".json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   常量
+   ========================================================= */
+const LS_KEY = 'equipment_slots_editor_skeleton_v1';
+
+/* 骨架默认值，与 rpg_demo_0.0.002.html 完全一致 */
+function defaultSlots(){
+  return [
+    { key: 'head',    name: '头部' },
+    { key: 'ear',     name: '耳部' },
+    { key: 'chest',   name: '胸部' },
+    { key: 'hands',   name: '手部' },
+    { key: 'legs',    name: '腿部' },
+    { key: 'feet',    name: '脚部' },
+    { key: 'weapon1', name: '主要武器 1' },
+    { key: 'weapon2', name: '槽位 2' },
+    { key: 'bag',     name: '背包' }
+  ];
+}
+
+/* items._props.Slot 里 weapon 会映射到这两个槽位（代码硬编码） */
+const WEAPON_ALIAS = 'weapon';
+const WEAPON_TARGETS = ['weapon1', 'weapon2'];
+
+/* =========================================================
+   状态
+   ========================================================= */
+let slots = defaultSlots();
+let selectedKey = null;
+
+/* 加载的 items 表；null 表示未加载 */
+let itemsRef = null;
+
+const listBody     = document.getElementById('listBody');
+const detail       = document.getElementById('detail');
+const stat         = document.getElementById('stat');
+const searchInput  = document.getElementById('searchInput');
+const itemsFile    = document.getElementById('itemsFile');
+const itemsStatus  = document.getElementById('itemsStatus');
+const clearItemsBtn= document.getElementById('clearItemsBtn');
+
+/* =========================================================
+   工具
+   ========================================================= */
+function esc(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function save(){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(exportable())); } catch(e){}
+}
+function currentSlot(){
+  return slots.find(s => s.key === selectedKey) || null;
+}
+function hasItemsData(){ return itemsRef !== null; }
+
+/* =========================================================
+   导入归一化 / 导出
+   ========================================================= */
+function normalize(raw){
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return defaultSlots();
+  const arr = [];
+  Object.keys(raw).forEach(k => {
+    const v = raw[k];
+    arr.push({
+      key: String(k),
+      name: v && v.name != null ? String(v.name) : String(k)
+    });
+  });
+  return arr.length ? arr : defaultSlots();
+}
+
+function exportable(){
+  const out = {};
+  slots.forEach(s => {
+    out[s.key] = { name: s.name || '' };
+  });
+  return out;
+}
+
+/* =========================================================
+   引用统计
+   ========================================================= */
+function computeReferences(){
+  if (!itemsRef) return null;
+  const refCount = {};
+  const unknown = {};       /* slotValue -> [itemKey] */
+  let weaponAliasCount = 0;
+
+  slots.forEach(s => { refCount[s.key] = 0; });
+
+  Object.keys(itemsRef).forEach(itemKey => {
+    const item = itemsRef[itemKey];
+    const slotVal = item && item._props && item._props.Slot;
+    if (!slotVal) return;
+
+    if (slotVal === WEAPON_ALIAS){
+      weaponAliasCount++;
+      WEAPON_TARGETS.forEach(t => {
+        if (refCount[t] != null) refCount[t]++;
+      });
+      return;
+    }
+
+    if (refCount[slotVal] != null){
+      refCount[slotVal]++;
+    } else {
+      if (!unknown[slotVal]) unknown[slotVal] = [];
+      unknown[slotVal].push(itemKey);
+    }
+  });
+
+  return { refCount, unknown, weaponAliasCount };
+}
+
+/* =========================================================
+   列表
+   ========================================================= */
+function visibleSlots(){
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) return slots.slice();
+  return slots.filter(s =>
+    s.key.toLowerCase().indexOf(q) !== -1 ||
+    String(s.name || '').toLowerCase().indexOf(q) !== -1
+  );
+}
+
+function renderList(){
+  const rows = visibleSlots();
+  const refs = computeReferences();
+
+  if (!slots.length){
+    listBody.innerHTML = `<tr><td colspan="5" class="hint">槽位为空。点击「＋ 新增槽位」开始。</td></tr>`;
+    stat.textContent = '共 0 个槽位';
+    return;
+  }
+
+  listBody.innerHTML = rows.map(s => {
+    const isWeaponTarget = WEAPON_TARGETS.includes(s.key);
+    const aliasTag = isWeaponTarget
+      ? `<span class="tag warn">weapon 别名</span>`
+      : '';
+    const refCell = refs
+      ? `<span class="${refs.refCount[s.key] ? '' : 'dim'}">${refs.refCount[s.key] || 0}</span>`
+      : `<span class="dim">—</span>`;
+    return `<tr data-key="${esc(s.key)}" draggable="true" class="${s.key===selectedKey?'selected':''}">
+      <td class="drag">⠿</td>
+      <td>${esc(s.key)}</td>
+      <td>${esc(s.name || '')}</td>
+      <td class="num">${refCell}</td>
+      <td>${aliasTag}</td>
+    </tr>`;
+  }).join('');
+
+  stat.textContent = `共 ${slots.length} 个槽位` +
+    (rows.length !== slots.length ? ` / 显示 ${rows.length}` : '');
+}
+
+/* =========================================================
+   拖拽排序
+   ========================================================= */
+let dragKey = null;
+let dropTarget = null;
+
+function clearDropMarkers(){
+  listBody.querySelectorAll('.drop-before,.drop-after').forEach(el => {
+    el.classList.remove('drop-before','drop-after');
+  });
+}
+function moveItem(srcKey, tgtKey, after){
+  const si = slots.findIndex(s => s.key === srcKey);
+  if (si < 0) return;
+  const item = slots.splice(si, 1)[0];
+  let ti = slots.findIndex(s => s.key === tgtKey);
+  if (ti < 0){ slots.splice(si, 0, item); return; }
+  if (after) ti += 1;
+  slots.splice(ti, 0, item);
+  save(); renderList();
+}
+
+listBody.addEventListener('dragstart', e => {
+  const tr = e.target.closest('tr');
+  if (!tr || !tr.dataset.key) return;
+  dragKey = tr.dataset.key;
+  tr.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', dragKey); } catch(_){}
+});
+listBody.addEventListener('dragover', e => {
+  if (!dragKey) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr');
+  clearDropMarkers();
+  if (!tr || !tr.dataset.key || tr.dataset.key === dragKey){ dropTarget = null; return; }
+  const r = tr.getBoundingClientRect();
+  const after = (e.clientY - r.top) > r.height/2;
+  tr.classList.add(after ? 'drop-after' : 'drop-before');
+  dropTarget = {key: tr.dataset.key, after};
+});
+listBody.addEventListener('drop', e => {
+  if (!dragKey || !dropTarget) return;
+  e.preventDefault();
+  const src = dragKey;
+  const t = dropTarget;
+  dragKey = null; dropTarget = null;
+  clearDropMarkers();
+  moveItem(src, t.key, t.after);
+});
+listBody.addEventListener('dragend', () => {
+  dragKey = null; dropTarget = null;
+  clearDropMarkers();
+  listBody.querySelectorAll('tr.dragging').forEach(el => el.classList.remove('dragging'));
+});
+
+/* =========================================================
+   详情
+   ========================================================= */
+function renderCheckPanel(slot){
+  if (!hasItemsData()){
+    return `<div class="check-panel">
+      <div class="row">未加载 items.json，跳过引用校验。点击顶部「加载 items.json」可校验 <code>_props.Slot</code>。</div>
+    </div>`;
+  }
+  const refs = computeReferences();
+  const n = refs.refCount[slot.key] || 0;
+  const lines = [];
+  lines.push(`<div class="row">该槽位被 <b>${n}</b> 件 items 引用（含 weapon 别名计入）。</div>`);
+
+  if (WEAPON_TARGETS.includes(slot.key)){
+    lines.push(`<div class="row">items 中 <code>Slot="${WEAPON_ALIAS}"</code> 会映射到 <code>weapon1</code> / <code>weapon2</code>（代码硬编码）。当前共 <b>${refs.weaponAliasCount}</b> 件 weapon 别名物品。</div>`);
+  }
+
+  const unknownKeys = Object.keys(refs.unknown);
+  if (unknownKeys.length){
+    lines.push(`<div class="row err">items 中存在 ${unknownKeys.length} 个无法映射到任何槽位的 Slot 值：</div>`);
+    unknownKeys.forEach(k => {
+      const list = refs.unknown[k].slice(0, 5).join(', ');
+      const more = refs.unknown[k].length > 5 ? ` 等 ${refs.unknown[k].length} 件` : '';
+      lines.push(`<div class="row err">· <code>${esc(k)}</code> → ${esc(list)}${more}</div>`);
+    });
+  } else {
+    lines.push(`<div class="row ok">✓ 所有 items 的 Slot 值均可映射。</div>`);
+  }
+  return `<div class="check-panel">${lines.join('')}</div>`;
+}
+
+function renderDetail(){
+  const slot = currentSlot();
+  if (!slot){
+    detail.innerHTML = `<p class="hint">← 从左侧选择一个槽位进行编辑，或点击「＋ 新增槽位」。</p>`;
+    return;
+  }
+  const isWeaponTarget = WEAPON_TARGETS.includes(slot.key);
+  const isSpecial = slot.key === 'bag' || isWeaponTarget;
+
+  let h = '';
+
+  h += '<div class="section-title">槽位信息</div>';
+  h += `<div class="field">
+    <div class="field-head"><label>Key（槽位 id）</label></div>
+    <input type="text" id="slotKeyInput" value="${esc(slot.key)}">
+    <div class="tagline">引用方为 items._props.Slot；重命名会断开现有引用，需要同步改 items。</div>
+  </div>`;
+  h += `<div class="field">
+    <div class="field-head"><label>显示名</label></div>
+    <input type="text" id="slotNameInput" value="${esc(slot.name || '')}">
+    <div class="tagline">装备面板、items 编辑器里显示的名称。</div>
+  </div>`;
+
+  h += '<div class="section-title">特殊槽位</div>';
+  if (isWeaponTarget){
+    h += `<div class="tagline" style="margin-bottom:6px">
+      <span class="tag warn">weapon 别名</span>
+      items 中 <code>Slot="${WEAPON_ALIAS}"</code> 的物品会占用此槽位。
+      rpg_demo 里按 <b>weapon1 → weapon2</b> 顺序填充，两个槽位都存在时武器可双持。
+    </div>`;
+  }
+  if (slot.key === 'bag'){
+    h += `<div class="tagline" style="margin-bottom:6px">
+      <span class="tag warn">背包</span>
+      背包装备占用此槽位；背包装备本身不占其它容器。装备后按 <code>CapacityGrid</code> 决定背包网格大小；死亡不丢失背包装备，只清空内容。
+    </div>`;
+  }
+  if (!isSpecial){
+    h += `<div class="tagline" style="margin-bottom:6px">普通槽位：只影响显示与 items.Slot 引用，没有额外硬编码规则。</div>`;
+  }
+
+  h += '<div class="section-title">items 引用</div>';
+  h += renderCheckPanel(slot);
+
+  h += `<div class="danger-zone">
+    <h3>删除槽位</h3>
+    <p>删除后，items 中 <code>Slot="${esc(slot.key)}"</code> 的物品会变成“无法映射”。</p>
+    <button id="delSlotBtn" class="danger">删除此槽位</button>
+  </div>`;
+
+  detail.innerHTML = h;
+
+  /* 绑定 */
+  const keyInput  = document.getElementById('slotKeyInput');
+  const nameInput = document.getElementById('slotNameInput');
+  const delBtn    = document.getElementById('delSlotBtn');
+
+  keyInput.addEventListener('change', () => {
+    const nv = String(keyInput.value).trim();
+    if (!nv){
+      alert('Key 不能为空');
+      keyInput.value = slot.key;
+      return;
+    }
+    if (nv === slot.key) return;
+    if (slots.some(s => s !== slot && s.key === nv)){
+      alert('Key 已存在：' + nv);
+      keyInput.value = slot.key;
+      return;
+    }
+    if (nv === WEAPON_ALIAS){
+      alert('"weapon" 是 items 中的别名，不直接作为槽位 key；请使用 weapon1 / weapon2。');
+      keyInput.value = slot.key;
+      return;
+    }
+    slot.key = nv;
+    selectedKey = nv;
+    save(); renderList(); renderDetail();
+  });
+
+  nameInput.addEventListener('input', () => {
+    slot.name = nameInput.value;
+    renderList(); save();
+  });
+  nameInput.addEventListener('change', () => {
+    if (!slot.name) { slot.name = slot.key; nameInput.value = slot.name; save(); }
+  });
+
+  delBtn.addEventListener('click', () => {
+    if (slots.length <= 1){
+      alert('至少保留 1 个槽位');
+      return;
+    }
+    if (!confirm(`确认删除槽位 "${slot.key}"？`)) return;
+    const idx = slots.findIndex(s => s.key === slot.key);
+    if (idx < 0) return;
+    slots.splice(idx, 1);
+    selectedKey = slots.length ? slots[Math.min(idx, slots.length - 1)].key : null;
+    save(); renderList(); renderDetail();
+  });
+}
+
+/* =========================================================
+   列表交互
+   ========================================================= */
+listBody.addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if (!tr || !tr.dataset.key) return;
+  if (tr.dataset.key === selectedKey) return;
+  selectedKey = tr.dataset.key;
+  renderList(); renderDetail();
+});
+
+/* =========================================================
+   新增 / 重置
+   ========================================================= */
+function nextSlotKey(){
+  let i = 1;
+  while (slots.some(s => s.key === 'slot' + i)) i++;
+  return 'slot' + i;
+}
+
+document.getElementById('addBtn').onclick = () => {
+  const key = nextSlotKey();
+  slots.push({ key, name: '新槽位 ' + key });
+  selectedKey = key;
+  save(); renderList(); renderDetail();
+};
+
+document.getElementById('resetBtn').onclick = () => {
+  if (!confirm('重置为骨架数据？当前编辑将丢失。')) return;
+  slots = defaultSlots();
+  selectedKey = slots[0].key;
+  save(); renderList(); renderDetail();
+};
+
+/* =========================================================
+   导入 / 导出
+   ========================================================= */
+document.getElementById('importBtn').onclick = () => {
+  document.getElementById('importInput').click();
+};
+
+document.getElementById('importInput').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const raw = JSON.parse(ev.target.result);
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)){
+        throw new Error('根节点必须是对象');
+      }
+      slots = normalize(raw);
+      selectedKey = slots[0].key;
+      save(); renderList(); renderDetail();
+    }catch(err){
+      alert('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+document.getElementById('exportBtn').onclick = () => {
+  const text = JSON.stringify(exportable(), null, 2);
+  const blob = new Blob([text], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'equipment_slots.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* =========================================================
+   items 参考表
+   ========================================================= */
+document.getElementById('loadItemsBtn').onclick = () => itemsFile.click();
+
+itemsFile.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const raw = JSON.parse(ev.target.result);
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)){
+        throw new Error('items.json 根节点必须是对象');
+      }
+      itemsRef = raw;
+      const n = Object.keys(raw).length;
+      itemsStatus.textContent = `已加载 ${n} 条 items`;
+      itemsStatus.className = 'ok';
+      clearItemsBtn.disabled = false;
+      renderList(); renderDetail();
+    }catch(err){
+      alert('items.json 解析失败：' + err.message);
+      itemsStatus.textContent = '加载失败';
+      itemsStatus.className = 'miss';
+    }
+  };
+  reader.readAsText(file);
+  itemsFile.value = '';
+});
+
+clearItemsBtn.onclick = () => {
+  itemsRef = null;
+  itemsStatus.textContent = '未加载';
+  itemsStatus.className = 'hint';
+  clearItemsBtn.disabled = true;
+  renderList(); renderDetail();
+};
+
+document.getElementById('revalidateBtn').onclick = () => {
+  renderList(); renderDetail();
+};
+
+/* =========================================================
+   筛选
+   ========================================================= */
+searchInput.addEventListener('input', renderList);
+
+/* =========================================================
+   启动
+   ========================================================= */
+(function init(){
+  const raw = localStorage.getItem(LS_KEY);
+  if (raw){
+    try{
+      slots = normalize(JSON.parse(raw));
+    }catch(_){ slots = defaultSlots(); }
+  } else {
+    slots = defaultSlots();
+  }
+  selectedKey = slots.length ? slots[0].key : null;
+  renderList(); renderDetail();
+})();
+
+})();
+</script>
+</body>
+</html>

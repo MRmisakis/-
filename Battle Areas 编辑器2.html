@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Battle Areas 编辑器 · 含刷新权重</title>
+<style>
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{
+    display:flex;gap:8px;align-items:center;padding:10px 14px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  header h1{font-size:15px;margin:0 12px 0 0;color:var(--text-strong);font-weight:normal}
+  button{
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px;
+  }
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select{
+    background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);
+    padding:5px 8px;font-family:inherit;font-size:13px;width:100%;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  #searchInput{width:190px}
+  .stat{color:var(--text-dim);font-size:12px;margin-left:auto}
+
+  .toolbar{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding:8px 14px;background:#161616;border-bottom:1px solid var(--line);
+    font-size:12px;
+  }
+  .toolbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim)}
+  .toolbar .fsep{width:1px;height:18px;background:var(--line)}
+  .toolbar .hint{color:var(--text-dim);font-size:11px}
+  .toolbar .ok{color:var(--gain)}
+  .toolbar .miss{color:var(--danger)}
+  .mini{
+    font-size:11px;padding:3px 9px;background:#0E0E0E;
+    border:1px solid var(--line);color:var(--accent);cursor:pointer;font-family:inherit;
+  }
+  .mini:hover{border-color:var(--accent)}
+  .mini:disabled{opacity:.4;cursor:not-allowed}
+
+  main{flex:1;display:flex;min-height:0}
+  .left{flex:1;min-width:0;overflow:auto;border-right:1px solid var(--line)}
+  .right{width:600px;flex:none;overflow:auto;padding:14px;background:var(--panel)}
+
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{
+    position:sticky;top:0;background:var(--panel2);color:var(--text-dim);
+    font-weight:normal;font-size:12px;z-index:1;
+  }
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.selected{background:#1A2A3A}
+  tbody tr.dragging{opacity:.35}
+  tbody tr.drop-before td{border-top:2px solid var(--accent)}
+  tbody tr.drop-after td{border-bottom:2px solid var(--accent)}
+  td.drag{cursor:grab;color:#4a4a4a;text-align:center;user-select:none;width:26px}
+  td.drag:active{cursor:grabbing}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .dim{color:var(--text-dim)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+  .miss{color:var(--danger)}
+
+  .field{margin-bottom:9px}
+  .field label{display:block;color:var(--text-dim);font-size:12px;margin-bottom:3px}
+  .field-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:3px}
+  .field-head label{margin:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px}
+  .section-title{
+    color:var(--accent);font-size:13px;margin:18px 0 10px;
+    border-bottom:1px solid var(--line);padding-bottom:4px;
+  }
+  .section-title:first-child{margin-top:0}
+
+  .bool-item{
+    display:flex;align-items:center;gap:8px;padding:4px 0;
+    cursor:pointer;font-size:12px;color:var(--text);
+  }
+  .bool-item input{display:none}
+  .bool-item .track{
+    width:30px;height:16px;border-radius:8px;background:#2a2a2a;
+    border:1px solid var(--line);position:relative;flex:none;margin-left:auto;
+    transition:background .15s,border-color .15s;
+  }
+  .bool-item .track::after{
+    content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;
+    border-radius:50%;background:#666;transition:transform .15s,background .15s;
+  }
+  .bool-item input:checked + .track{background:#16324d;border-color:var(--accent)}
+  .bool-item input:checked + .track::after{transform:translateX(14px);background:var(--accent)}
+
+  .tagline{font-size:11px;color:var(--text-dim);margin-top:3px}
+
+  /* 怪物池权重表 */
+  .pool-table{width:100%;border-collapse:collapse;margin-top:6px}
+  .pool-table th,.pool-table td{
+    padding:4px 6px;border-bottom:1px solid #222;font-size:12px;text-align:left;
+  }
+  .pool-table th{color:var(--text-dim);font-weight:normal;font-size:11px;background:#161616}
+  .pool-table td input{padding:2px 6px;font-size:12px;width:100%}
+  .pool-table .del{
+    background:transparent;border:1px solid var(--line);color:var(--danger);
+    padding:1px 7px;font-size:12px;cursor:pointer;border-radius:3px;
+  }
+  .pool-table .del:hover{border-color:var(--danger)}
+  .pool-table .prob-cell{font-variant-numeric:tabular-nums;color:#BFE8FF}
+  .pool-table tr.zero td{opacity:.55}
+  .pool-summary{font-size:11px;color:var(--text-dim);margin-top:6px}
+  .pool-summary.warn{color:#E0A050}
+  .pool-summary.err{color:#E07A7A}
+  .pool-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+
+  .pool-input{
+    border:1px solid var(--line);background:#0E0E0E;width:100%;
+    padding:5px 8px;font-size:12px;color:var(--text-strong);
+    margin-top:8px;
+  }
+  .pool-input:focus{outline:none;border-color:var(--accent)}
+
+  .check-panel{
+    margin-top:10px;padding:8px 10px;border-radius:4px;
+    background:#0F1A22;border:1px solid #1E3A4A;font-size:12px;color:#7FCFFF;
+  }
+  .check-panel b{color:#BFE8FF}
+  .check-panel .err{color:#E07A7A}
+  .check-panel .ok{color:#5FE0A0}
+  .check-panel .row{margin:2px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Battle Areas 编辑器 · 含刷新权重</h1>
+  <button id="addBtn">＋ 新增</button>
+  <button id="dupBtn">⧉ 复制</button>
+  <button id="delBtn" class="danger">－ 删除</button>
+  <button id="importBtn">导入 JSON</button>
+  <button id="exportBtn">导出 JSON</button>
+  <input type="text" id="searchInput" placeholder="搜索 Key / ID / 名字 / 怪物">
+  <span class="stat" id="stat"></span>
+</header>
+
+<div class="toolbar">
+  <label>Monsters 参考
+    <button id="loadMonBtn" class="mini">加载 monsters.json</button>
+    <button id="clearMonBtn" class="mini" disabled>清除参考</button>
+    <input type="file" id="monFile" accept=".json" hidden>
+  </label>
+  <span id="monStatus" class="hint">未加载</span>
+  <span class="fsep"></span>
+  <button id="revalidateBtn" class="mini">重新校验</button>
+  <span class="hint">monsterPool 中的 id 应存在于 monsters.json；权重按总和归一化，精确到 0.01%。</span>
+</div>
+
+<main>
+  <div class="left">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Key</th><th>_id</th><th>名字</th>
+          <th class="num">怪物数</th><th class="num">刷新秒</th><th class="num">同时出怪</th>
+          <th>MonsterPool · 概率</th><th>调试</th>
+        </tr>
+      </thead>
+      <tbody id="listBody"></tbody>
+    </table>
+  </div>
+  <div class="right" id="detail"></div>
+</main>
+
+<input type="file" id="importInput" accept=".json" hidden>
+<datalist id="monList"></datalist>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   常量
+   ========================================================= */
+const LS_KEY = 'battle_areas_editor_skeleton_v2';
+
+const ENTRY_ORDER = [
+  '_id','_name','_debugSample',
+  'monsterPool','monsterWeights','respawnDelaySec','simultaneousSpawn'
+];
+
+/* =========================================================
+   数据模型
+   ========================================================= */
+function num(v, d){
+  if (v === '' || v === null || v === undefined) return d;
+  const n = Number(v);
+  return isFinite(n) ? n : d;
+}
+
+function normalizeEntry(key, obj){
+  obj = obj || {};
+
+  /* monsterPool：兼容 ['m1'] 和 [{id:'m1'}] 两种写法，去重 */
+  const rawPool = Array.isArray(obj.monsterPool) ? obj.monsterPool : [];
+  const seen = new Set();
+  const pool = [];
+  for (const x of rawPool){
+    let id = '';
+    if (typeof x === 'string') id = x.trim();
+    else if (x && typeof x === 'object' && x.id != null) id = String(x.id).trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    pool.push(id);
+  }
+
+  /* monsterWeights：对象映射，每只怪物一个权重（百分比数值） */
+  const rawW = (obj.monsterWeights && typeof obj.monsterWeights === 'object'
+                && !Array.isArray(obj.monsterWeights))
+    ? obj.monsterWeights : {};
+  const weights = {};
+  for (const id of pool){
+    const w = Number(rawW[id]);
+    weights[id] = (isFinite(w) && w >= 0) ? Math.round(w * 100) / 100 : 1;
+  }
+
+  const out = {
+    key: String(key),
+    _id:   obj._id   != null ? String(obj._id)   : String(key),
+    _name: obj._name != null ? String(obj._name) : '',
+    _debugSample: !!obj._debugSample,
+    monsterPool: pool,
+    monsterWeights: weights,
+    respawnDelaySec: Math.max(0, Math.round(num(obj.respawnDelaySec, 2) * 100) / 100),
+    simultaneousSpawn: Math.max(1, Math.floor(num(obj.simultaneousSpawn, 1)))
+  };
+  Object.keys(obj).forEach(k => { if (!(k in out)) out[k] = obj[k]; });
+  return out;
+}
+
+function defaultData(){
+  return [
+    normalizeEntry('a1', {
+      _id:'a1', _name:'新手草原', _debugSample:true,
+      monsterPool:['m1'], monsterWeights:{m1:1},
+      respawnDelaySec:2, simultaneousSpawn:1
+    })
+  ];
+}
+
+/* =========================================================
+   状态
+   ========================================================= */
+let data = [];
+let selectedKey = null;
+
+/* 怪物索引：id -> {_id, _name, lv}；未加载时为 null */
+let monsterIndex = null;
+
+const listBody    = document.getElementById('listBody');
+const detail      = document.getElementById('detail');
+const stat        = document.getElementById('stat');
+const searchInput = document.getElementById('searchInput');
+const monFile     = document.getElementById('monFile');
+const monStatus   = document.getElementById('monStatus');
+const monList     = document.getElementById('monList');
+const clearMonBtn = document.getElementById('clearMonBtn');
+
+/* =========================================================
+   工具
+   ========================================================= */
+function esc(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function save(){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e){}
+}
+function currentItem(){
+  return data.find(d => d.key === selectedKey) || null;
+}
+function hasMonsterData(){ return monsterIndex !== null; }
+function monsterExists(id){ return !hasMonsterData() || !!monsterIndex[id]; }
+function monsterLabel(id){
+  if (!hasMonsterData()) return id;
+  const m = monsterIndex[id];
+  if (!m) return id + '（缺失）';
+  return id + ' · ' + (m._name || '') + (m.lv ? ' Lv.' + m.lv : '');
+}
+
+/* =========================================================
+   概率计算
+   ========================================================= */
+function computeProbabilities(pool, weights){
+  const total = pool.reduce((s, id) => s + (Number(weights[id]) || 0), 0);
+  const probs = {};
+  for (const id of pool){
+    const w = Number(weights[id]) || 0;
+    probs[id] = total > 0 ? w / total : 0;
+  }
+  return { probs, total };
+}
+
+/* =========================================================
+   怪物参考表
+   ========================================================= */
+function applyMonsterTable(raw){
+  const idx = {};
+  if (Array.isArray(raw)){
+    raw.forEach((m, i) => {
+      if (!m || typeof m !== 'object') return;
+      const id = m._id != null ? String(m._id) : String(i);
+      idx[id] = m;
+    });
+  } else if (raw && typeof raw === 'object'){
+    Object.keys(raw).forEach(k => {
+      const m = raw[k];
+      if (!m || typeof m !== 'object') return;
+      const id = m._id != null ? String(m._id) : k;
+      idx[id] = m;
+    });
+  }
+  monsterIndex = idx;
+  const n = Object.keys(idx).length;
+  monStatus.textContent = `已加载 ${n} 只怪物`;
+  monStatus.className = 'ok';
+  clearMonBtn.disabled = false;
+  renderMonsterDatalist();
+  renderList();
+  renderDetail();
+}
+
+function clearMonsterTable(){
+  monsterIndex = null;
+  monStatus.textContent = '未加载';
+  monStatus.className = 'hint';
+  clearMonBtn.disabled = true;
+  renderMonsterDatalist();
+  renderList();
+  renderDetail();
+}
+
+function renderMonsterDatalist(){
+  if (!hasMonsterData()){ monList.innerHTML = ''; return; }
+  monList.innerHTML = Object.keys(monsterIndex).map(id => {
+    const m = monsterIndex[id];
+    return `<option value="${esc(id)}">${esc((m._name || '') + (m.lv ? ' Lv.' + m.lv : ''))}</option>`;
+  }).join('');
+}
+
+/* =========================================================
+   筛选
+   ========================================================= */
+function visibleRows(){
+  const q = searchInput.value.trim().toLowerCase();
+  return data.filter(d => {
+    if (!q) return true;
+    const hay = [d.key, d._id, d._name, (d.monsterPool || []).join(' ')]
+      .join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  });
+}
+
+/* =========================================================
+   列表
+   ========================================================= */
+function poolLabelShort(d){
+  const pool = d.monsterPool || [];
+  if (!pool.length) return '<span class="dim">—</span>';
+  const ws = d.monsterWeights || {};
+  const { probs, total } = computeProbabilities(pool, ws);
+  const parts = pool.slice(0, 4).map(id => {
+    if (total <= 0) return id + ':0%';
+    const pct = probs[id] * 100;
+    const txt = pct >= 10 ? pct.toFixed(0) : pct.toFixed(2);
+    return `${id}:${txt}%`;
+  });
+  const tail = pool.length > 4 ? ` …+${pool.length - 4}` : '';
+  return esc(parts.join(' ')) + tail;
+}
+
+function renderList(){
+  const rows = visibleRows();
+  listBody.innerHTML = rows.map(d => {
+    const pool = d.monsterPool || [];
+    const miss = hasMonsterData() ? pool.filter(id => !monsterExists(id)) : [];
+    const missCount = miss.length;
+    return `<tr data-key="${esc(d.key)}" draggable="true" class="${d.key===selectedKey?'selected':''}">
+      <td class="drag">⠿</td>
+      <td class="dim">${esc(d.key)}</td>
+      <td class="dim">${esc(d._id)}</td>
+      <td>${esc(d._name || '')}</td>
+      <td class="num">${pool.length}${missCount ? ` <span class="miss">(缺${missCount})</span>` : ''}</td>
+      <td class="num">${d.respawnDelaySec}</td>
+      <td class="num">${d.simultaneousSpawn}</td>
+      <td class="dim">${poolLabelShort(d)}</td>
+      <td class="dim">${d._debugSample ? '✓' : ''}</td>
+    </tr>`;
+  }).join('');
+  stat.textContent = `共 ${data.length} 条` +
+    (rows.length !== data.length ? ` / 显示 ${rows.length}` : '');
+}
+
+/* =========================================================
+   拖拽排序
+   ========================================================= */
+let dragKey = null;
+let dropTarget = null;
+
+function clearDropMarkers(){
+  listBody.querySelectorAll('.drop-before,.drop-after').forEach(el => {
+    el.classList.remove('drop-before','drop-after');
+  });
+}
+function moveItem(srcKey, tgtKey, after){
+  const si = data.findIndex(d => d.key === srcKey);
+  if (si < 0) return;
+  const item = data.splice(si,1)[0];
+  let ti = data.findIndex(d => d.key === tgtKey);
+  if (ti < 0){ data.splice(si,0,item); return; }
+  if (after) ti += 1;
+  data.splice(ti,0,item);
+  save(); renderList();
+}
+
+listBody.addEventListener('dragstart', e => {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  dragKey = tr.dataset.key;
+  tr.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', dragKey); } catch(_){}
+});
+listBody.addEventListener('dragover', e => {
+  if (!dragKey) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr');
+  clearDropMarkers();
+  if (!tr || tr.dataset.key === dragKey){ dropTarget = null; return; }
+  const r = tr.getBoundingClientRect();
+  const after = (e.clientY - r.top) > r.height/2;
+  tr.classList.add(after ? 'drop-after' : 'drop-before');
+  dropTarget = {key:tr.dataset.key, after};
+});
+listBody.addEventListener('drop', e => {
+  if (!dragKey || !dropTarget) return;
+  e.preventDefault();
+  const src = dragKey;
+  const t = dropTarget;
+  dragKey = null; dropTarget = null;
+  clearDropMarkers();
+  moveItem(src, t.key, t.after);
+});
+listBody.addEventListener('dragend', () => {
+  dragKey = null; dropTarget = null;
+  clearDropMarkers();
+  listBody.querySelectorAll('tr.dragging').forEach(el => el.classList.remove('dragging'));
+});
+
+/* =========================================================
+   详情渲染
+   ========================================================= */
+function field(label, attr, val){
+  return `<div class="field"><label>${label}</label>
+    <input type="text" ${attr} value="${esc(val)}"></div>`;
+}
+
+function boolHTML(attr, label, val){
+  return `<label class="bool-item">
+    <span>${label}</span>
+    <input type="checkbox" ${attr} ${val?'checked':''}>
+    <span class="track"></span>
+  </label>`;
+}
+
+function renderPoolTable(item){
+  const pool = item.monsterPool || [];
+  const weights = item.monsterWeights || {};
+  const { probs, total } = computeProbabilities(pool, weights);
+
+  if (!pool.length){
+    return `<div style="padding:10px 2px;color:var(--text-dim);font-size:12px">暂无怪物。在下方输入 id 添加。</div>`;
+  }
+
+  const rows = pool.map(id => {
+    const miss = hasMonsterData() && !monsterExists(id);
+    const w = weights[id] ?? 1;
+    const pct = total > 0 ? (probs[id] * 100).toFixed(2) + '%' : '—';
+    return `<tr data-id="${esc(id)}" class="${w <= 0 ? 'zero' : ''}">
+      <td class="${miss?'miss':''}" title="${esc(monsterLabel(id))}">${esc(monsterLabel(id))}${miss?' ⚠':''}</td>
+      <td><input type="number" data-weight="${esc(id)}" value="${w}" step="0.01" min="0"></td>
+      <td class="num prob-cell" data-prob="${esc(id)}">${pct}</td>
+      <td><button type="button" class="del" data-remove="${esc(id)}" title="移除">×</button></td>
+    </tr>`;
+  }).join('');
+
+  let summary;
+  let summaryCls = '';
+  if (total <= 0){
+    summary = '总权重为 0，该区域不会刷新任何怪物';
+    summaryCls = 'err';
+  } else if (Math.abs(total - 100) < 0.005){
+    summary = `总权重 ${total.toFixed(2)}（已对齐 100%）`;
+  } else {
+    summary = `总权重 ${total.toFixed(2)}，实际概率按比例归一化`;
+    summaryCls = 'warn';
+  }
+
+  return `<table class="pool-table">
+    <thead><tr>
+      <th>怪物</th>
+      <th style="width:100px">权重</th>
+      <th class="num" style="width:90px">实际概率</th>
+      <th style="width:36px"></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="pool-summary ${summaryCls}">${summary}</div>
+  <div class="pool-actions">
+    <button type="button" class="mini" data-action="even">均分权重</button>
+    <button type="button" class="mini" data-action="set100">总和设为 100</button>
+    <button type="button" class="mini" data-action="reset">全部重置为 1</button>
+  </div>`;
+}
+
+function renderCheckPanel(item){
+  if (!hasMonsterData()){
+    return `<div class="check-panel">
+      <div class="row">未加载 monsters.json，跳过引用校验。点击顶部「加载 monsters.json」可校验。</div>
+    </div>`;
+  }
+  const pool = item.monsterPool || [];
+  if (!pool.length){
+    return `<div class="check-panel">
+      <div class="row err">monsterPool 为空：该区域无法生成敌人。</div>
+    </div>`;
+  }
+  const miss = pool.filter(id => !monsterExists(id));
+  const { total } = computeProbabilities(pool, item.monsterWeights || {});
+  const lines = [];
+  if (miss.length){
+    lines.push(`<div class="row err">缺失 ${miss.length} 个怪物 id：${esc(miss.join(', '))}</div>`);
+    lines.push(`<div class="row">这些 id 不在已加载的 monsters.json 中，战斗区域生成时会跳过。</div>`);
+  } else {
+    lines.push(`<div class="row ok">✓ monsterPool 全部引用有效（${pool.length} 个）。</div>`);
+  }
+  if (total <= 0){
+    lines.push(`<div class="row err">总权重为 0：该区域不会刷新任何怪物。</div>`);
+  } else {
+    lines.push(`<div class="row">总权重 <b>${total.toFixed(2)}</b>，实际概率已按比例归一化。</div>`);
+  }
+  return `<div class="check-panel">${lines.join('')}</div>`;
+}
+
+function renderDetail(){
+  const item = currentItem();
+  if (!item){
+    detail.innerHTML = '<p class="hint">← 从左侧选择一个战斗区域进行编辑</p>';
+    return;
+  }
+  let h = '';
+
+  h += '<div class="section-title">基本信息</div>';
+  h += field('Key（对象键）', 'data-root="key"', item.key);
+  h += '<div class="grid2">';
+  h += field('_id（标识）', 'data-root="_id"', item._id);
+  h += field('_name（名字）', 'data-root="_name"', item._name);
+  h += '</div>';
+  h += boolHTML('data-root="_debugSample"', '_debugSample（调试样例）', item._debugSample);
+
+  h += '<div class="section-title">刷新与出怪</div>';
+  h += '<div class="grid3">';
+  h += `<div class="field">
+    <div class="field-head"><label>respawnDelaySec 刷新秒</label></div>
+    <input type="number" step="0.5" min="0" data-num="respawnDelaySec" value="${item.respawnDelaySec}">
+    <div class="tagline">胜利后等待 N 秒再刷下一只；骨架默认 2</div>
+  </div>`;
+  h += `<div class="field">
+    <div class="field-head"><label>simultaneousSpawn 同时出怪</label></div>
+    <input type="number" step="1" min="1" data-num="simultaneousSpawn" value="${item.simultaneousSpawn}">
+    <div class="tagline">≥ 1；V1 只实现单只，多只预留</div>
+  </div>`;
+  h += '</div>';
+
+  h += '<div class="section-title">monsterPool 怪物池 · 刷新权重 <span style="font-size:11px;color:var(--text-dim);font-weight:normal">权重按总和归一化，精确到 0.01%</span></div>';
+  h += `<div id="poolWrap">${renderPoolTable(item)}</div>`;
+  h += `<input class="pool-input" id="poolInput" type="text" list="monList"
+    placeholder="输入怪物 id 回车添加（支持逗号批量），默认权重 1">`;
+  h += renderCheckPanel(item);
+
+  detail.innerHTML = h;
+
+  const wrap = document.getElementById('poolWrap');
+  if (!wrap) return;
+
+  /* 移除 / 批量操作 */
+  wrap.addEventListener('click', e => {
+    const removeBtn = e.target.closest('[data-remove]');
+    if (removeBtn){
+      const id = removeBtn.dataset.remove;
+      item.monsterPool = item.monsterPool.filter(v => v !== id);
+      delete item.monsterWeights[id];
+      save(); renderList(); renderDetail();
+      return;
+    }
+    const actionBtn = e.target.closest('[data-action]');
+    if (actionBtn){
+      const act = actionBtn.dataset.action;
+      if (act === 'even') evenWeights(item);
+      else if (act === 'set100') scaleTo100(item);
+      else if (act === 'reset'){
+        for (const id of item.monsterPool) item.monsterWeights[id] = 1;
+      }
+      save(); renderList(); renderDetail();
+      return;
+    }
+  });
+
+  /* 权重输入：实时更新概率列，不重建 DOM */
+  wrap.addEventListener('input', e => {
+    const el = e.target.closest('[data-weight]');
+    if (!el) return;
+    const id = el.dataset.weight;
+    const raw = el.value.trim();
+    if (raw === '') return; // 空值暂不更新，等失焦恢复
+    let v = Number(raw);
+    if (!isFinite(v) || v < 0) v = 0;
+    v = Math.round(v * 100) / 100;
+    item.monsterWeights[id] = v;
+    updateProbCells(item);
+    save();
+  });
+
+  /* 权重失焦：空值恢复为原值 */
+  wrap.addEventListener('change', e => {
+    const el = e.target.closest('[data-weight]');
+    if (!el) return;
+    const id = el.dataset.weight;
+    if (el.value.trim() === ''){
+      el.value = item.monsterWeights[id] ?? 1;
+    }
+    renderList();
+  });
+
+  /* 添加怪物 */
+  const input = document.getElementById('poolInput');
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const raw = String(input.value).trim();
+    if (!raw) return;
+    const parts = raw.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+    let added = 0;
+    for (const p of parts){
+      if (!item.monsterPool.includes(p)){
+        item.monsterPool.push(p);
+        item.monsterWeights[p] = 1;
+        added++;
+      }
+    }
+    input.value = '';
+    if (added){ save(); renderList(); renderDetail(); }
+  });
+}
+
+/* 只更新概率列 + 总权重提示，不重建表格 */
+function updateProbCells(item){
+  const pool = item.monsterPool || [];
+  const weights = item.monsterWeights || {};
+  const { probs, total } = computeProbabilities(pool, weights);
+
+  for (const id of pool){
+    const cell = detail.querySelector(`.prob-cell[data-prob="${CSS.escape(id)}"]`);
+    if (!cell) continue;
+    cell.textContent = total > 0 ? (probs[id] * 100).toFixed(2) + '%' : '—';
+  }
+
+  const summary = detail.querySelector('.pool-summary');
+  if (summary){
+    if (total <= 0){
+      summary.textContent = '总权重为 0，该区域不会刷新任何怪物';
+      summary.className = 'pool-summary err';
+    } else if (Math.abs(total - 100) < 0.005){
+      summary.textContent = `总权重 ${total.toFixed(2)}（已对齐 100%）`;
+      summary.className = 'pool-summary';
+    } else {
+      summary.textContent = `总权重 ${total.toFixed(2)}，实际概率按比例归一化`;
+      summary.className = 'pool-summary warn';
+    }
+  }
+
+  /* 权重为 0 的行变暗 */
+  for (const id of pool){
+    const tr = detail.querySelector(`.pool-table tr[data-id="${CSS.escape(id)}"]`);
+    if (!tr) continue;
+    const w = Number(weights[id]) || 0;
+    tr.classList.toggle('zero', w <= 0);
+  }
+}
+
+/* =========================================================
+   权重工具
+   ========================================================= */
+function evenWeights(item){
+  const pool = item.monsterPool || [];
+  if (!pool.length) return;
+  const each = Math.round((100 / pool.length) * 100) / 100;
+  let acc = 0;
+  for (let i = 0; i < pool.length; i++){
+    const id = pool[i];
+    if (i === pool.length - 1){
+      item.monsterWeights[id] = Math.round((100 - acc) * 100) / 100;
+    } else {
+      item.monsterWeights[id] = each;
+      acc += each;
+    }
+  }
+}
+
+function scaleTo100(item){
+  const pool = item.monsterPool || [];
+  if (!pool.length) return;
+  const ws = item.monsterWeights || {};
+  const total = pool.reduce((s, id) => s + (Number(ws[id]) || 0), 0);
+  if (total <= 0){
+    evenWeights(item);
+    return;
+  }
+  let acc = 0;
+  for (let i = 0; i < pool.length; i++){
+    const id = pool[i];
+    if (i === pool.length - 1){
+      ws[id] = Math.round((100 - acc) * 100) / 100;
+    } else {
+      const v = Math.round(((Number(ws[id]) || 0) / total) * 100 * 100) / 100;
+      ws[id] = v;
+      acc += v;
+    }
+  }
+}
+
+/* =========================================================
+   编辑事件
+   ========================================================= */
+function onEdit(e){
+  const el = e.target;
+  const item = currentItem();
+  if (!item) return;
+
+  if (el.dataset.root){
+    const k = el.dataset.root;
+
+    if (k === 'key'){
+      if (e.type !== 'change') return;
+      const nv = String(el.value).trim();
+      if (!nv){ el.value = item.key; return; }
+      if (nv === item.key) return;
+      if (data.some(d => d !== item && d.key === nv)){
+        alert('Key 已存在：' + nv);
+        el.value = item.key;
+        return;
+      }
+      item.key = nv;
+      if (!item._id || item._id === selectedKey) item._id = nv;
+      selectedKey = nv;
+      renderList(); renderDetail(); save();
+      return;
+    }
+
+    if (k === '_debugSample'){
+      item._debugSample = el.checked;
+      renderDetail(); renderList(); save();
+      return;
+    }
+
+    item[k] = el.value;
+    renderList(); save();
+    return;
+  }
+
+  if (el.dataset.num){
+    const k = el.dataset.num;
+    let v = el.value === '' ? 0 : Number(el.value);
+    if (!isFinite(v)) v = 0;
+    if (k === 'respawnDelaySec') v = Math.max(0, Math.round(v * 100) / 100);
+    if (k === 'simultaneousSpawn') v = Math.max(1, Math.floor(v));
+    item[k] = v;
+    renderList(); save();
+    return;
+  }
+}
+
+detail.addEventListener('input',  onEdit);
+detail.addEventListener('change', onEdit);
+
+/* =========================================================
+   列表交互
+   ========================================================= */
+listBody.addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  if (tr.dataset.key === selectedKey) return;
+  selectedKey = tr.dataset.key;
+  renderList(); renderDetail();
+});
+
+/* =========================================================
+   新增 / 复制 / 删除
+   ========================================================= */
+function nextKey(){
+  let max = 0;
+  data.forEach(d => {
+    const m = String(d.key).match(/^a(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1],10));
+  });
+  return 'a' + (max + 1);
+}
+
+document.getElementById('addBtn').onclick = () => {
+  const key = nextKey();
+  const it = normalizeEntry(key, {
+    _id: key, _name: '新区域', _debugSample: false,
+    monsterPool: [], monsterWeights: {},
+    respawnDelaySec: 2, simultaneousSpawn: 1
+  });
+  data.push(it);
+  selectedKey = it.key;
+  renderList(); renderDetail(); save();
+};
+
+document.getElementById('dupBtn').onclick = () => {
+  const src = currentItem();
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.key = nextKey();
+  copy._id = copy.key;
+  copy._name = (copy._name || '') + '_副本';
+  copy._debugSample = false;
+  data.push(copy);
+  selectedKey = copy.key;
+  renderList(); renderDetail(); save();
+};
+
+document.getElementById('delBtn').onclick = () => {
+  if (!selectedKey) return;
+  if (!confirm('确认删除 ' + selectedKey + ' ?')) return;
+  const idx = data.findIndex(d => d.key === selectedKey);
+  if (idx < 0) return;
+  data.splice(idx,1);
+  selectedKey = data.length ? data[Math.min(idx,data.length-1)].key : null;
+  renderList(); renderDetail(); save();
+};
+
+/* =========================================================
+   导入 / 导出
+   ========================================================= */
+document.getElementById('importBtn').onclick = () => {
+  document.getElementById('importInput').click();
+};
+
+document.getElementById('importInput').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const obj = JSON.parse(ev.target.result);
+      if (Array.isArray(obj)){
+        data = obj.map((x,i) => normalizeEntry(x.key != null ? x.key : ('a'+(i+1)), x));
+      } else if (obj && typeof obj === 'object'){
+        data = Object.keys(obj).map(k => normalizeEntry(k, obj[k]));
+      } else {
+        throw new Error('根节点必须是对象或数组');
+      }
+      selectedKey = data.length ? data[0].key : null;
+      renderList(); renderDetail(); save();
+    }catch(err){
+      alert('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+document.getElementById('loadMonBtn').onclick = () => monFile.click();
+monFile.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const raw = JSON.parse(ev.target.result);
+      applyMonsterTable(raw);
+    }catch(err){
+      alert('monsters.json 解析失败：' + err.message);
+      monStatus.textContent = '加载失败';
+      monStatus.className = 'miss';
+    }
+  };
+  reader.readAsText(file);
+  monFile.value = '';
+});
+
+clearMonBtn.onclick = clearMonsterTable;
+
+document.getElementById('revalidateBtn').onclick = () => {
+  renderList(); renderDetail();
+};
+
+function indentBlock(str, level){
+  const pad = '  '.repeat(level);
+  return str.split('\n').map((l,i) => i === 0 ? l : pad + l).join('\n');
+}
+
+function buildEntry(d){
+  const out = {};
+  ENTRY_ORDER.forEach(k => {
+    if (k === '_debugSample'){
+      if (d._debugSample) out[k] = true;
+      return;
+    }
+    if (k === 'monsterPool'){
+      out[k] = Array.isArray(d.monsterPool) ? d.monsterPool.slice() : [];
+      return;
+    }
+    if (k === 'monsterWeights'){
+      const pool = d.monsterPool || [];
+      const ws = d.monsterWeights || {};
+      if (!pool.length) return;
+      /* 全部权重都是 1 → 省略，保持旧数据简洁 */
+      const allOne = pool.every(id => (ws[id] ?? 1) === 1);
+      if (allOne) return;
+      const wout = {};
+      for (const id of pool){
+        const w = Number(ws[id] ?? 1);
+        wout[id] = Number((isFinite(w) ? w : 1).toFixed(2));
+      }
+      out[k] = wout;
+      return;
+    }
+    if (d[k] !== undefined && d[k] !== null) out[k] = d[k];
+  });
+  Object.keys(d).forEach(k => {
+    if (!(k in out) && k !== 'key' && k !== 'monsterWeights') out[k] = d[k];
+  });
+  return out;
+}
+
+function buildJSONText(){
+  const parts = data.map(d => {
+    return '  ' + JSON.stringify(d.key) + ': ' +
+      indentBlock(JSON.stringify(buildEntry(d), null, 2), 1);
+  });
+  return '{\n' + parts.join(',\n') + '\n}';
+}
+
+document.getElementById('exportBtn').onclick = () => {
+  const text = buildJSONText();
+  const blob = new Blob([text], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'battle_areas.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* =========================================================
+   筛选
+   ========================================================= */
+searchInput.addEventListener('input', renderList);
+
+/* =========================================================
+   启动
+   ========================================================= */
+(function init(){
+  const raw = localStorage.getItem(LS_KEY);
+  if (raw){
+    try{
+      const parsed = JSON.parse(raw);
+      data = Array.isArray(parsed)
+        ? parsed.map(d => normalizeEntry(d.key, d))
+        : defaultData();
+    }catch(_){ data = defaultData(); }
+  } else {
+    data = defaultData();
+  }
+  if (!data.length) data = defaultData();
+  selectedKey = data[0].key;
+  renderList(); renderDetail();
+})();
+
+})();
+</script>
+</body>
+</html>

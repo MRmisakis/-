@@ -1,0 +1,2136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>游戏数据表 · 合并编辑器（Skills / Monsters / Players）</title>
+<style>
+  /* SECTION: 主题变量与基础 */
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040; --warn:#E8B14C;
+  }
+  *{box-sizing:border-box;scrollbar-color:#555 #000;scrollbar-width:thin}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:#000}
+  ::-webkit-scrollbar-thumb{background:#555;border-radius:5px;border:1px solid #000}
+  ::-webkit-scrollbar-thumb:hover{background:#777}
+  ::-webkit-scrollbar-corner{background:#000}
+  html,body{max-width:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New","PingFang SC","Microsoft YaHei",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px}
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select,textarea{background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);padding:5px 8px;font-family:inherit;font-size:13px;width:100%;min-width:0}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  input[type=checkbox]{width:auto;accent-color:var(--accent)}
+
+  /* SECTION: 顶栏与页签 */
+  header{display:flex;gap:8px;align-items:center;padding:9px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:15px;margin:0 10px 0 0;color:var(--text-strong);font-weight:normal;white-space:nowrap}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tabs button{padding:6px 14px;font-size:13px;border-bottom-width:2px}
+  .tabs button.on{border-color:var(--accent);color:var(--text-strong);background:#16232F}
+  .tabs button .cnt{color:var(--text-dim);font-size:11px;margin-left:5px}
+  #exportAllBtn{margin-left:auto}
+  .stat{color:var(--text-dim);font-size:12px}
+  .stat .ok{color:var(--gain)}
+  .stat .err{color:var(--danger)}
+
+  /* SECTION: 面板骨架 */
+  .tabpane{flex:1;min-height:0;display:none;flex-direction:column}
+  .tabpane.on{display:flex}
+  .panebar{display:flex;gap:8px;align-items:center;padding:8px 14px;background:#181818;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .panebar .search{width:200px}
+  .panebar .stat{margin-left:auto}
+  .filterbar,.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 14px;background:#161616;border-bottom:1px solid var(--line);font-size:12px}
+  .filterbar label,.toolbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim);flex-wrap:wrap}
+  .filterbar select,.filterbar input,.toolbar select{width:auto;padding:3px 6px;font-size:12px}
+  .filterbar input.lv{width:58px}
+  .fsep{width:1px;height:18px;background:var(--line)}
+  .toolbar .hint{color:var(--text-dim);font-size:11px}
+  .toolbar .ok{color:var(--gain)}
+  .toolbar .miss{color:var(--danger)}
+  .chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text);cursor:pointer}
+  .mini{font-size:11px;padding:3px 9px;background:#0E0E0E;border:1px solid var(--line);color:var(--accent);cursor:pointer;font-family:inherit}
+  .mini:hover{border-color:var(--accent)}
+  .mini:disabled{opacity:.4;cursor:not-allowed}
+  .tri{border:1px solid var(--line);background:var(--panel2);padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;border-radius:3px}
+  .tri b{font-weight:normal;color:#777}
+  .tri[data-state="on"]{border-color:var(--gain);color:var(--gain)}
+  .tri[data-state="on"] b{color:var(--gain)}
+  .tri[data-state="off"]{border-color:var(--danger);color:var(--danger)}
+  .tri[data-state="off"] b{color:var(--danger)}
+  #mResetFilter,#pResetFilter{margin-left:auto;padding:4px 10px;font-size:12px}
+
+  main{flex:1;display:flex;min-height:0}
+  .left{flex:1;min-width:0;overflow:auto;border-right:1px solid var(--line)}
+  .right{width:720px;max-width:52vw;flex:none;overflow:auto;padding:14px;background:var(--panel)}
+
+  /* SECTION: 列表表格 */
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{position:sticky;top:0;background:var(--panel2);color:var(--text-dim);font-weight:normal;font-size:12px;z-index:1}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.selected{background:#1A2A3A}
+  tbody tr.dragging{opacity:.35}
+  tbody tr.drop-before td{border-top:2px solid var(--accent)}
+  tbody tr.drop-after td{border-bottom:2px solid var(--accent)}
+  td.drag{cursor:grab;color:#4a4a4a;text-align:center;user-select:none;width:26px}
+  td.drag:active{cursor:grabbing}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .dim{color:var(--text-dim)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+  .miss{color:var(--danger)}
+
+  /* SECTION: 表单 */
+  .field{margin-bottom:9px;min-width:0}
+  .field label{display:block;color:var(--text-dim);font-size:12px;margin-bottom:3px}
+  .field-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:3px}
+  .field-head label{margin:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:0 8px}
+  .section-title{color:var(--accent);font-size:13px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .section-title:first-child{margin-top:0}
+  .section-title .r{margin-left:auto;font-size:11px;color:var(--text-dim);font-weight:normal}
+  .bool-item{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12px;color:var(--text)}
+  .bool-item input{display:none}
+  .bool-item .track{width:30px;height:16px;border-radius:8px;background:#2a2a2a;border:1px solid var(--line);position:relative;flex:none;margin-left:auto;transition:background .15s,border-color .15s}
+  .bool-item .track::after{content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:#666;transition:transform .15s,background .15s}
+  .bool-item input:checked + .track{background:#16324d;border-color:var(--accent)}
+  .bool-item input:checked + .track::after{transform:translateX(14px);background:var(--accent)}
+  .tagline{font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.6}
+  .derived{background:#0F1A22;border:1px solid #1E3A4A;border-radius:4px;padding:6px 8px;font-size:12px;color:#7FCFFF;margin-top:6px}
+  .derived b{color:#BFE8FF;font-weight:600}
+  .check-panel{margin-top:10px;padding:8px 10px;border-radius:4px;background:#0F1A22;border:1px solid #1E3A4A;font-size:12px;color:#7FCFFF}
+  .check-panel b{color:#BFE8FF}
+  .check-panel .err{color:#E07A7A}
+  .check-panel .ok{color:#5FE0A0}
+  .check-panel .warn{color:#E0A050}
+  .check-panel .row{margin:3px 0}
+  .exp-panel{background:#14101E;border:1px solid #2E1E4A;border-radius:4px;padding:8px 10px;font-size:12px;color:#C0A0FF}
+  .exp-panel b{color:#E0C8FF}
+  .exp-panel .row{margin:3px 0}
+  .exp-panel .fixed{color:#FFC060}
+  .exp-panel .bad{color:#E07A7A}
+  .lv-pill{display:inline-block;padding:1px 6px;border-radius:3px;background:#1A2A3A;color:#7FB8FF;font-size:11px}
+  .exp-pill{display:inline-block;padding:1px 6px;border-radius:3px;background:#2A1A3A;color:#C090FF;font-size:11px}
+  .gold-pill{display:inline-block;padding:1px 6px;border-radius:3px;background:#3A2A10;color:#F0C040;font-size:11px}
+  .eq-pill{display:inline-block;padding:1px 6px;border-radius:3px;background:#1A3020;color:#7FE3A4;font-size:11px}
+  .sk-pill{display:inline-block;padding:1px 6px;border-radius:3px;background:#2A2010;color:#E8B14C;font-size:11px}
+  .eff-pill{display:inline-block;padding:1px 6px;border-radius:3px;background:#12261F;color:#5FE0A0;font-size:11px}
+  .dt-physical{color:#E0A050}
+  .dt-magical{color:#B06CFF}
+  .at-normal{color:#A0A0A0}
+  .at-heavy{color:#E05050}
+  .at-skill{color:#50C0E0}
+
+  /* SECTION: 掉落 / 物品池表格 */
+  .drop-table,.pool-table{width:100%;border-collapse:collapse;margin-top:4px}
+  .drop-table th,.drop-table td,.pool-table th,.pool-table td{padding:4px 5px;border-bottom:1px solid #222;text-align:left;font-size:12px}
+  .drop-table th,.pool-table th{color:var(--text-dim);font-weight:normal;font-size:11px;background:#161616;position:static}
+  .drop-table td input,.pool-table td input{padding:3px 6px;font-size:12px}
+  .drop-table tr.missing td,.pool-table tr.missing td{background:#2A1010}
+  .drop-table .name,.pool-table .item-name{color:var(--text-dim);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pool-table .slot-name{color:var(--text-dim);width:90px}
+  .drop-table .del,.pool-table .del{background:transparent;border:1px solid var(--line);color:var(--danger);padding:1px 8px;font-size:12px;cursor:pointer;border-radius:3px}
+  .drop-table .del:hover,.pool-table .del:hover{border-color:var(--danger)}
+  .drop-actions,.pool-actions{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}
+  .empty{padding:6px 2px;color:var(--text-dim);font-size:12px;font-style:italic}
+  .group-card{border:1px solid #2E3A4A;background:#141A22;border-radius:6px;padding:8px 10px;margin:8px 0}
+  .group-head{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .group-head input[type=text]{flex:1;min-width:90px}
+  .group-head .g-prob{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);flex:none}
+  .group-head .g-prob input{width:90px}
+  .group-head select{width:auto;flex:none}
+
+  /* SECTION: 技能效果矩阵（战斗属性 + 7 列 + 消耗HP/MP） */
+  .eff-scroll{overflow-x:auto;padding-bottom:4px}
+  .eff-inner{min-width:690px}
+  .eff-head,.eff-row{display:grid;grid-template-columns:86px 106px 58px 34px 34px 50px 50px 50px 60px 60px 52px;gap:4px;align-items:center}
+  .eff-head{margin:6px 0 4px}
+  .eff-head span{font-size:10px;color:#777;text-align:center;line-height:1.25}
+  .eff-head span:first-child{text-align:left}
+  .eff-row{margin-bottom:3px}
+  .eff-row + .eff-row{border-top:1px dashed #232323;padding-top:3px}
+  .eff-label{font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .eff-label b{color:var(--text);font-weight:normal}
+  .eff-row input[type=number]{padding:2px 4px;font-size:11px;width:100%;text-align:center}
+  .eff-row select{padding:2px 3px;font-size:11px}
+  .eff-row input[type=checkbox]{justify-self:center;width:auto;margin:0}
+  .eff-ops{display:flex;gap:3px;justify-content:center}
+  .eff-btn{padding:1px 6px;font-size:11px;line-height:1.5;border-radius:3px}
+  .eff-key-blk{border-bottom:1px solid #232323;padding-bottom:4px;margin-bottom:4px}
+  .legend{margin-top:10px;font-size:11px;color:var(--text-dim);line-height:1.7;border:1px solid var(--line);background:#151515;padding:6px 9px}
+  .legend summary{cursor:pointer;color:var(--accent);font-size:12px;outline:none}
+  .legend table{width:100%;margin-top:6px;border-collapse:collapse}
+  .legend td{border-bottom:1px solid #222;padding:3px 6px;white-space:normal;text-align:left}
+  .legend td:first-child{color:var(--text-strong);width:76px}
+
+  /* SECTION: 响应式 */
+  @media(max-width:1100px){
+    .right{width:56vw}
+  }
+  @media(max-width:900px){
+    body{height:auto;min-height:100vh;overflow:auto}
+    .tabpane{flex:none}
+    .tabpane.on{display:block}
+    main{flex-direction:column}
+    .left{border-right:none;border-bottom:1px solid var(--line);max-height:44vh}
+    .right{width:auto;max-width:none;flex:none;overflow:visible}
+    .grid2,.grid3,.grid4{grid-template-columns:1fr 1fr}
+    .panebar .search{width:140px}
+    #exportAllBtn{margin-left:0}
+    .eff-head,.eff-row{font-size:11px}
+    input,select,textarea{font-size:16px}
+    .eff-row input[type=number],.eff-row select{font-size:13px}
+  }
+</style>
+</head>
+<body>
+
+<!-- SECTION: 顶栏 -->
+<header>
+  <h1>游戏数据表 · 合并编辑器</h1>
+  <nav class="tabs">
+    <button type="button" data-tab="skills" class="on">技能 Skills<span class="cnt" id="cntSkills">0</span></button>
+    <button type="button" data-tab="monsters">怪物 Monsters<span class="cnt" id="cntMonsters">0</span></button>
+    <button type="button" data-tab="players">玩家 Players<span class="cnt" id="cntPlayers">0</span></button>
+  </nav>
+  <button id="exportAllBtn">导出全部 JSON</button>
+  <span class="stat" id="globalStat"></span>
+</header>
+
+<!-- SECTION: 技能页 -->
+<section class="tabpane on" data-pane="skills">
+  <div class="panebar">
+    <button id="sAddBtn">＋ 新增</button>
+    <button id="sDupBtn">⧉ 复制</button>
+    <button id="sDelBtn" class="danger">－ 删除</button>
+    <button id="sImportBtn">导入 skills.json</button>
+    <button id="sExportBtn">导出 skills.json</button>
+    <input type="text" id="sSearch" class="search" placeholder="搜索 Key / ID / 名字">
+    <span class="stat" id="sStat"></span>
+  </div>
+  <div class="toolbar">
+    <label>枚举参考
+      <button id="sLoadDmgBtn" class="mini">加载 damage_types.json</button>
+      <button id="sLoadAtkBtn" class="mini">加载 attack_types.json</button>
+    </label>
+    <span id="sRefStatus" class="hint">未加载</span>
+    <span class="fsep"></span>
+    <label class="chk"><input type="checkbox" id="sEffFormat"> 效果导出为对象格式</label>
+    <label class="chk"><input type="checkbox" id="sSkipZero"> 导出省略全零效果</label>
+    <label class="chk"><input type="checkbox" id="sOnlyUsed"> 只显示已配置的效果</label>
+    <span class="fsep"></span>
+    <button id="sRevalidateBtn" class="mini">重新校验</button>
+    <input type="file" id="sDmgFile" accept=".json" hidden>
+    <input type="file" id="sAtkFile" accept=".json" hidden>
+    <input type="file" id="sImportFile" accept=".json" hidden>
+  </div>
+  <main>
+    <div class="left">
+      <table>
+        <thead>
+          <tr>
+            <th></th><th>Key</th><th>_id</th><th>名字</th>
+            <th>伤害</th><th>攻击</th>
+            <th class="num">MP</th><th class="num">冷却秒</th><th class="num">倍率</th>
+            <th class="num">效果</th><th>自动</th><th>调试</th>
+          </tr>
+        </thead>
+        <tbody id="sListBody"></tbody>
+      </table>
+    </div>
+    <div class="right" id="sDetail"></div>
+  </main>
+</section>
+
+<!-- SECTION: 怪物页 -->
+<section class="tabpane" data-pane="monsters">
+  <div class="panebar">
+    <button id="mAddBtn">＋ 新增</button>
+    <button id="mDupBtn">⧉ 复制</button>
+    <button id="mDelBtn" class="danger">－ 删除</button>
+    <button id="mImportBtn">导入 monsters.json</button>
+    <button id="mExportBtn">导出 monsters.json</button>
+    <input type="text" id="mSearch" class="search" placeholder="搜索 Key / ID / 名字">
+    <span class="stat" id="mStat"></span>
+  </div>
+  <div class="filterbar">
+    <label>Lv
+      <input type="number" id="mLvMin" class="lv" placeholder="min" min="1" step="1">
+      ~
+      <input type="number" id="mLvMax" class="lv" placeholder="max" min="1" step="1">
+    </label>
+    <label>伤害类型 <select id="mFDamageType"></select></label>
+    <label>攻击类型 <select id="mFAttackType"></select></label>
+    <span class="fsep"></span>
+    <button class="tri" data-mtri="_debugSample" data-state="all">调试样例 · <b class="tri-val">全部</b></button>
+    <button class="tri" data-mtri="_hasSkill" data-state="all">有技能 · <b class="tri-val">全部</b></button>
+    <button id="mResetFilter">重置筛选</button>
+  </div>
+  <div class="toolbar">
+    <label>Items 参考
+      <button id="mLoadItemsBtn" class="mini">加载 items.json</button>
+      <button id="mClearItemsBtn" class="mini" disabled>清除参考</button>
+    </label>
+    <span id="mItemsStatus" class="hint">未加载</span>
+    <span class="fsep"></span>
+    <button id="mRevalidateBtn" class="mini">重新校验</button>
+    <span class="hint">技能列表取自「技能」页签；items.json 用于掉落 itemId 补全与校验。</span>
+    <input type="file" id="mItemsFile" accept=".json" hidden>
+    <input type="file" id="mImportFile" accept=".json" hidden>
+  </div>
+  <main>
+    <div class="left">
+      <table>
+        <thead>
+          <tr>
+            <th></th><th>Key</th><th>_id</th><th>名字</th><th>Lv</th><th>EXP</th>
+            <th class="num">HP</th><th class="num">STR</th><th class="num">DEF</th><th class="num">SPD</th>
+            <th>伤害</th><th>攻击</th><th class="num">技能</th><th class="num">掉落</th><th>调试</th>
+          </tr>
+        </thead>
+        <tbody id="mListBody"></tbody>
+      </table>
+    </div>
+    <div class="right" id="mDetail"></div>
+  </main>
+</section>
+
+<!-- SECTION: 玩家页 -->
+<section class="tabpane" data-pane="players">
+  <div class="panebar">
+    <button id="pAddBtn">＋ 新增</button>
+    <button id="pDupBtn">⧉ 复制</button>
+    <button id="pDelBtn" class="danger">－ 删除</button>
+    <button id="pImportBtn">导入 players.json</button>
+    <button id="pExportBtn">导出 players.json</button>
+    <input type="text" id="pSearch" class="search" placeholder="搜索 Key / ID / 名字">
+    <span class="stat" id="pStat"></span>
+  </div>
+  <div class="filterbar">
+    <label>Lv
+      <input type="number" id="pLvMin" class="lv" placeholder="min" min="1" step="1">
+      ~
+      <input type="number" id="pLvMax" class="lv" placeholder="max" min="1" step="1">
+    </label>
+    <span class="fsep"></span>
+    <button class="tri" data-ptri="_debugSample" data-state="all">调试样例 · <b class="tri-val">全部</b></button>
+    <button class="tri" data-ptri="_hasSkill" data-state="all">有技能 · <b class="tri-val">全部</b></button>
+    <button id="pResetFilter">重置筛选</button>
+  </div>
+  <div class="toolbar">
+    <label>Items 参考
+      <button id="pLoadItemsBtn" class="mini">加载 items.json</button>
+      <button id="pClearItemsBtn" class="mini" disabled>清除参考</button>
+    </label>
+    <span id="pItemsStatus" class="hint">未加载</span>
+    <span class="fsep"></span>
+    <button id="pRevalidateBtn" class="mini">重新校验</button>
+    <span class="hint">技能列表取自「技能」页签；items.json 用于初始装备 / 物品的下拉与校验。</span>
+    <input type="file" id="pItemsFile" accept=".json" hidden>
+    <input type="file" id="pImportFile" accept=".json" hidden>
+  </div>
+  <main>
+    <div class="left">
+      <table>
+        <thead>
+          <tr>
+            <th></th><th>Key</th><th>_id</th><th>名字</th><th>Lv</th>
+            <th class="num">HP</th><th class="num">STR</th><th class="num">DEF</th><th class="num">SPD</th>
+            <th class="num">初始铜币</th><th class="num">技能</th><th class="num">初装</th><th class="num">初物</th><th>调试</th>
+          </tr>
+        </thead>
+        <tbody id="pListBody"></tbody>
+      </table>
+    </div>
+    <div class="right" id="pDetail"></div>
+  </main>
+</section>
+
+<datalist id="skillList"></datalist>
+<datalist id="mItemList"></datalist>
+<datalist id="pItemList"></datalist>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   SECTION: 共用工具
+   ========================================================= */
+function esc(s){
+  return String(s===null||s===undefined?'':s)
+    .replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+}
+function num(v,d){ if(v===''||v===null||v===undefined) return d; const n=Number(v); return isFinite(n)?n:d; }
+function nz(v){ const n=Number(v); return isFinite(n)?n:0; }
+function r2(v){ return Math.round(nz(v)*100)/100; }
+function r4(v){ return Math.round(nz(v)*10000)/10000; }
+function fmt(v){ const n=nz(v); return String(Math.round(n*10000)/10000); }
+function indentBlock(str,level){ const pad='  '.repeat(level); return str.split('\n').map(function(l,i){ return i===0?l:pad+l; }).join('\n'); }
+function saveLS(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function loadLS(k){ try{ const raw=localStorage.getItem(k); return raw?JSON.parse(raw):null; }catch(e){ return null; } }
+function download(filename,text){
+  const blob=new Blob([text],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(a.href); },400);
+}
+function pickFile(input,cb){
+  input.addEventListener('change',function(e){
+    const file=e.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{ cb(JSON.parse(ev.target.result)); }
+      catch(err){ alert(file.name+' 解析失败：'+err.message); }
+    };
+    reader.readAsText(file);
+    input.value='';
+  });
+}
+function critChance(T_CRT){ return Math.max(0.02,Math.min(0.75,nz(T_CRT)*0.05)); }
+
+/* 跨页签注册表：技能名、计数 */
+const REG={
+  skills:[],                       /* [{key,name}] */
+  skillName:function(k){ for(let i=0;i<REG.skills.length;i++){ if(REG.skills[i].key===k) return REG.skills[i].name; } return ''; },
+  hasSkill:function(k){ return REG.skills.some(function(s){ return s.key===k; }); },
+  counts:{skills:0,monsters:0,players:0}
+};
+
+/* =========================================================
+   SECTION: 战斗属性（12 字段）与效果矩阵模型
+   ========================================================= */
+const COMBAT_FIELDS=[
+  {k:'HP',label:'HP 生命'},{k:'MP',label:'MP 魔力'},
+  {k:'STR',label:'STR 物攻'},{k:'DEF',label:'DEF 物防'},
+  {k:'MGA',label:'MGA 魔攻'},{k:'MGD',label:'MGD 魔防'},
+  {k:'SPD',label:'SPD 速度'},{k:'CRT',label:'CRT 暴击基数'},
+  {k:'T_CRT',label:'T_CRT 真暴击'},{k:'LUK',label:'LUK 幸运'},
+  {k:'GP',label:'GP 成长力'},{k:'Cont',label:'Cont 控制抗性'}
+];
+const COMBAT_KEYS=COMBAT_FIELDS.map(function(f){ return f.k; });
+function combatLabel(k){ for(let i=0;i<COMBAT_FIELDS.length;i++){ if(COMBAT_FIELDS[i].k===k) return COMBAT_FIELDS[i].label; } return k; }
+
+const POS_KEYS=[
+  ['AttackBoost','攻击提升'],['DefenseBoost','防御提升'],['SpeedBoost','速度提升'],['CritBoost','暴击提升'],
+  ['HealthRegen','生命回复'],['ManaRegen','法力回复'],['ExperienceIncrease','经验增加'],['ExperienceBonus','经验加成'],
+  ['CopperBonus','铜币加成'],['CopperIncrease','铜币增加'],['DropRateBonus','掉落加成'],['GatherRateBonus','采集加成']
+];
+const NEG_KEYS=[
+  ['MinorBleeding','轻微流血'],['MajorBleeding','严重流血'],['Infection','感染'],['Fracture','骨折'],['Pain','疼痛'],
+  ['Poison','中毒'],['Paralysis','麻痹'],['Burn','烧伤'],['Frostbite','冻伤'],['AcidCorrosion','酸蚀']
+];
+const EFFECT_SECTIONS=[
+  {sec:'PositiveEffects',keys:POS_KEYS,title:'正向效果 PositiveEffects'},
+  {sec:'NegativeEffects',keys:NEG_KEYS,title:'负向效果 NegativeEffects'}
+];
+
+/* 一行效果 = 战斗属性 + 数值 + % + 移除 + 时间 + 持续 + 淡出 + 消耗HP + 消耗MP */
+function zeroRow(){ return {attr:'',v:0,pct:false,rem:false,time:0,dur:0,fade:0,hpCost:0,mpCost:0}; }
+function rowHasValue(r){
+  if(!r) return false;
+  return !!r.attr || nz(r.v)!==0 || !!r.pct || !!r.rem || nz(r.time)!==0 || nz(r.dur)!==0
+      || nz(r.fade)!==0 || nz(r.hpCost)!==0 || nz(r.mpCost)!==0;
+}
+function cloneRow(r){ return {attr:r.attr,v:nz(r.v),pct:!!r.pct,rem:!!r.rem,time:nz(r.time),dur:nz(r.dur),fade:nz(r.fade),hpCost:nz(r.hpCost),mpCost:nz(r.mpCost)}; }
+
+/* 兼容三种输入：9 位数组（新）/ 7 位数组（Items 旧格式）/ 命名对象 */
+function normRow(x){
+  const r=zeroRow();
+  if(x===null||x===undefined) return r;
+  if(Array.isArray(x)){
+    if(typeof x[0]==='string'){
+      r.attr=String(x[0]||'');
+      r.v=nz(x[1]); r.pct=!!x[2]; r.rem=!!x[3];
+      r.time=nz(x[4]); r.dur=nz(x[5]); r.fade=nz(x[6]);
+      r.hpCost=nz(x[7]); r.mpCost=nz(x[8]);
+    } else {
+      r.v=nz(x[0]); r.pct=!!x[1]; r.rem=!!x[2];
+      r.time=nz(x[3]); r.dur=nz(x[4]); r.fade=nz(x[5]);
+      r.hpCost=nz(x[6]); r.mpCost=nz(x[7]);
+    }
+    return r;
+  }
+  if(typeof x==='object'){
+    r.attr=x.attr!=null?String(x.attr):'';
+    r.v=nz(x.value!==undefined?x.value:x.v);
+    r.pct=!!(x.percent!==undefined?x.percent:x.pct);
+    r.rem=!!(x.removable!==undefined?x.removable:x.rem);
+    r.time=nz(x.time);
+    r.dur=nz(x.duration!==undefined?x.duration:x.dur);
+    r.fade=nz(x.fadeOut!==undefined?x.fadeOut:x.fade);
+    r.hpCost=nz(x.hpCost!==undefined?x.hpCost:x.costHp);
+    r.mpCost=nz(x.mpCost!==undefined?x.mpCost:x.costMp);
+    return r;
+  }
+  return r;
+}
+function normEffects(src,keys){
+  const out={};
+  keys.forEach(function(pair){
+    const k=pair[0]; let v=src?src[k]:undefined;
+    let rows;
+    if(v===undefined||v===null) rows=[zeroRow()];
+    else if(Array.isArray(v)) rows=v.map(normRow);
+    else rows=[normRow(v)];
+    if(!rows.length) rows=[zeroRow()];
+    out[k]=rows;
+  });
+  return out;
+}
+function rowToArray(r){ return [r.attr||'',nz(r.v),!!r.pct,!!r.rem,nz(r.time),nz(r.dur),nz(r.fade),nz(r.hpCost),nz(r.mpCost)]; }
+function rowToObject(r){
+  return {attr:r.attr||'',value:nz(r.v),percent:!!r.pct,removable:!!r.rem,
+    time:nz(r.time),duration:nz(r.dur),fadeOut:nz(r.fade),hpCost:nz(r.hpCost),mpCost:nz(r.mpCost)};
+}
+function effectsOut(eff,keys,asObject,skipZero){
+  const o={};
+  keys.forEach(function(pair){
+    const k=pair[0];
+    let rows=(eff&&eff[k])||[];
+    if(skipZero){
+      rows=rows.filter(rowHasValue);
+      if(!rows.length) return;
+    } else if(!rows.length){ rows=[zeroRow()]; }
+    o[k]=rows.map(asObject?rowToObject:rowToArray);
+  });
+  return o;
+}
+function countUsedRows(eff,keys){
+  let n=0;
+  keys.forEach(function(pair){ ((eff&&eff[pair[0]])||[]).forEach(function(r){ if(rowHasValue(r)) n++; }); });
+  return n;
+}
+function rowsMissingAttr(eff,keys){
+  const bad=[];
+  keys.forEach(function(pair){
+    ((eff&&eff[pair[0]])||[]).forEach(function(r){
+      if(rowHasValue(r)&&!r.attr) bad.push(pair[1]);
+    });
+  });
+  return bad;
+}
+
+/* =========================================================
+   SECTION: 通用表单片段
+   ========================================================= */
+function fieldText(label,attr,val){
+  return '<div class="field"><label>'+label+'</label><input type="text" '+attr+' value="'+esc(val)+'"></div>';
+}
+function fieldNum(label,attr,val,step,min,hint){
+  return '<div class="field"><div class="field-head"><label>'+label+'</label>'
+    +(hint?'<span class="tagline">'+esc(hint)+'</span>':'')+'</div>'
+    +'<input type="number" step="'+(step||'any')+'"'+(min!==undefined?' min="'+min+'"':'')+' '+attr+' value="'+(val===null||val===undefined?'':val)+'"></div>';
+}
+function fieldSelect(label,attr,list,val,placeholder){
+  let h='<div class="field"><label>'+label+'</label><select '+attr+'>';
+  if(placeholder!==false) h+='<option value="">（'+(placeholder||'空')+'）</option>';
+  list.forEach(function(o){
+    const v=typeof o==='object'?o.k:o, t=typeof o==='object'?o.label:o;
+    h+='<option value="'+esc(v)+'"'+(String(v)===String(val)?' selected':'')+'>'+esc(t)+'</option>';
+  });
+  if(val!==''&&val!==null&&val!==undefined&&!list.some(function(o){ return String(typeof o==='object'?o.k:o)===String(val); }))
+    h+='<option value="'+esc(val)+'" selected>'+esc(val)+'（未在列表中）</option>';
+  h+='</select></div>';
+  return h;
+}
+function boolHTML(attr,label,val){
+  return '<label class="bool-item"><span>'+label+'</span><input type="checkbox" '+attr+' '+(val?'checked':'')+'><span class="track"></span></label>';
+}
+function numFieldHTML(f,val){
+  return '<div class="field"><div class="field-head"><label>'+esc(f.label)+'</label>'
+    +(f.hint?'<span class="tagline">'+esc(f.hint)+'</span>':'')+'</div>'
+    +'<input type="number" step="'+f.step+'" min="'+f.min+'" data-num="'+f.k+'" value="'+val+'"></div>';
+}
+
+/* 效果矩阵渲染（技能页用） */
+function effHeadHTML(){
+  return '<div class="eff-head"><span>效果</span><span title="该效果作用于哪个战斗属性">战斗属性</span>'
+    +'<span title="对应效果数值（作用于被使用该 skill 的对象）">数值</span>'
+    +'<span title="数值是否为百分比">%</span>'
+    +'<span title="是否可以移除该效果">移除</span>'
+    +'<span title="作用时间">时间</span>'
+    +'<span title="持续效果">持续</span>'
+    +'<span title="效果从 100% 减少到 0% 的时间">淡出</span>'
+    +'<span title="扣除使用 skill 对象的 HP（hpCost）">消耗HP</span>'
+    +'<span title="扣除使用 skill 对象的 MP（mpCost）">消耗MP</span>'
+    +'<span>操作</span></div>';
+}
+function effRowsHTML(sec,key,label,rows,onlyUsed){
+  let h='';
+  const anyUsed=rows.some(rowHasValue);
+  rows.forEach(function(r,i){
+    /* 「只显示已配置」时，全零效果仍保留一行可编辑，否则无法新增 */
+    if(onlyUsed&&anyUsed&&!rowHasValue(r)) return;
+    const d='data-eff-sec="'+sec+'" data-eff-key="'+key+'" data-eff-row="'+i+'"';
+    h+='<div class="eff-row">';
+    h+='<span class="eff-label" title="'+esc(key)+'">'+(i===0?'<b>'+esc(label)+'</b>':'<span class="dim">└ 同类</span>')+'</span>';
+    h+='<select '+d+' data-eff-f="attr">';
+    h+='<option value=""'+(r.attr?'':' selected')+'>（不限属性）</option>';
+    COMBAT_FIELDS.forEach(function(f){
+      h+='<option value="'+esc(f.k)+'"'+(f.k===r.attr?' selected':'')+'>'+esc(f.label)+'</option>';
+    });
+    if(r.attr&&COMBAT_KEYS.indexOf(r.attr)===-1) h+='<option value="'+esc(r.attr)+'" selected>'+esc(r.attr)+'（未在列表中）</option>';
+    h+='</select>';
+    h+='<input type="number" step="any" '+d+' data-eff-f="v" value="'+fmt(r.v)+'">';
+    h+='<input type="checkbox" '+d+' data-eff-f="pct" '+(r.pct?'checked':'')+' title="数值是否为百分比">';
+    h+='<input type="checkbox" '+d+' data-eff-f="rem" '+(r.rem?'checked':'')+' title="是否可以移除该效果">';
+    h+='<input type="number" step="any" '+d+' data-eff-f="time" value="'+fmt(r.time)+'">';
+    h+='<input type="number" step="any" '+d+' data-eff-f="dur" value="'+fmt(r.dur)+'">';
+    h+='<input type="number" step="any" '+d+' data-eff-f="fade" value="'+fmt(r.fade)+'">';
+    h+='<input type="number" step="any" '+d+' data-eff-f="hpCost" value="'+fmt(r.hpCost)+'">';
+    h+='<input type="number" step="any" '+d+' data-eff-f="mpCost" value="'+fmt(r.mpCost)+'">';
+    h+='<span class="eff-ops">'
+      +'<button type="button" class="eff-btn" data-eff-add="'+esc(sec)+'|'+esc(key)+'|'+i+'" title="复制一条同类条目">＋</button>'
+      +'<button type="button" class="eff-btn danger" data-eff-del="'+esc(sec)+'|'+esc(key)+'|'+i+'" title="删除本条（仅剩一条时清零）">×</button>'
+      +'</span>';
+    h+='</div>';
+  });
+  if(!h) h='<div class="empty">该效果下所有条目均为零值，已被「只显示已配置的效果」隐藏。</div>';
+  return h;
+}
+function effLegendHTML(){
+  return '<details class="legend"><summary>效果矩阵各列含义（点击展开）</summary><table><tbody>'
+    +'<tr><td>战斗属性</td><td>该效果影响的战斗属性（12 字段：HP / MP / STR / DEF / MGA / MGD / SPD / CRT / T_CRT / LUK / GP / Cont）；留空表示不直接改属性，只走效果本身。</td></tr>'
+    +'<tr><td>数值</td><td>对应效果数值，作用于<b>被使用该 skill 的对象</b>。</td></tr>'
+    +'<tr><td>%</td><td>数值是否为百分比。</td></tr>'
+    +'<tr><td>移除</td><td>是否可以移除该效果。</td></tr>'
+    +'<tr><td>时间</td><td>作用时间。</td></tr>'
+    +'<tr><td>持续</td><td>持续效果。</td></tr>'
+    +'<tr><td>淡出</td><td>对应效果从 100% 减少到 0% 的时间。</td></tr>'
+    +'<tr><td>消耗HP</td><td>扣除使用 skill 对象的 HP（hpCost）。</td></tr>'
+    +'<tr><td>消耗MP</td><td>扣除使用 skill 对象的 MP（mpCost）。</td></tr>'
+    +'<tr><td>＋ / ×</td><td>＋ 在同一效果下再复制一条同类条目（可叠加多条不同属性）；× 删除该条，仅剩一条时改为清零。</td></tr>'
+    +'</tbody></table>'
+    +'<div style="margin-top:6px">导出默认用 9 位数组：<code>["STR",15,true,false,0,5,0,0,0]</code>；勾选「效果导出为对象格式」则输出命名字段对象。兼容导入 Items 的 7 位旧数组（消耗归入 hpCost）。</div></details>';
+}
+
+/* 技能选择表（怪物 / 玩家共用） */
+function skillPickerHTML(prefix,item){
+  const list=Array.isArray(item.skills)?item.skills:[];
+  let h='<table class="pool-table"><thead><tr><th style="width:34%">skillId</th><th>技能名（来自技能页）</th><th style="width:40px"></th></tr></thead><tbody>';
+  if(!list.length) h+='<tr><td colspan="3" class="empty">暂未配置技能。点下方「＋ 添加技能」。</td></tr>';
+  list.forEach(function(id,i){
+    const known=REG.hasSkill(id);
+    const nm=REG.skillName(id);
+    const bad=REG.skills.length&&!known;
+    h+='<tr class="'+(bad?'missing':'')+'">'
+      +'<td><input type="text" data-'+prefix+'-skill-idx="'+i+'" list="skillList" value="'+esc(id)+'" placeholder="如 s1"></td>'
+      +'<td class="item-name '+(bad?'miss':'')+'">'+esc(nm||(bad?'（技能表中未找到）':''))+(bad?' ⚠':'')+'</td>'
+      +'<td><button type="button" class="del" data-'+prefix+'-skill-del="'+i+'">×</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  h+='<div class="pool-actions"><button type="button" class="mini" data-'+prefix+'-skill-add="1">＋ 添加技能</button>'
+    +'<span class="tagline">可选值来自「技能」页签，可直接输入 id；技能改名后切回本页自动同步。</span></div>';
+  return h;
+}
+function renderSkillDatalist(){
+  const dl=document.getElementById('skillList');
+  dl.innerHTML=REG.skills.map(function(s){
+    return '<option value="'+esc(s.key)+'">'+esc(s.name||'')+'</option>';
+  }).join('');
+}
+
+/* =========================================================
+   SECTION: 页签切换与全局统计
+   ========================================================= */
+const MODULES={};
+let activeTab='skills';
+function updateGlobalStat(){
+  document.getElementById('cntSkills').textContent=REG.counts.skills;
+  document.getElementById('cntMonsters').textContent=REG.counts.monsters;
+  document.getElementById('cntPlayers').textContent=REG.counts.players;
+  document.getElementById('globalStat').innerHTML=
+    '技能 <span class="ok">'+REG.counts.skills+'</span> · 怪物 <span class="ok">'+REG.counts.monsters
+    +'</span> · 玩家 <span class="ok">'+REG.counts.players+'</span>';
+}
+function switchTab(name){
+  activeTab=name;
+  document.querySelectorAll('[data-tab]').forEach(function(b){ b.classList.toggle('on',b.dataset.tab===name); });
+  document.querySelectorAll('[data-pane]').forEach(function(p){ p.classList.toggle('on',p.dataset.pane===name); });
+  prefs.tab=name; saveLS(UI_KEY,prefs);
+  if(MODULES[name]&&MODULES[name].onShow) MODULES[name].onShow();
+}
+document.querySelectorAll('[data-tab]').forEach(function(b){
+  b.addEventListener('click',function(){ switchTab(b.dataset.tab); });
+});
+
+const UI_KEY='merged_editor_ui_v1';
+const prefs=Object.assign({tab:'skills',effFormat:false,skipZero:false,onlyUsed:false},loadLS(UI_KEY)||{});
+
+/* =========================================================
+   SECTION: 技能模块
+   ========================================================= */
+MODULES.skills=(function(){
+  const LS_KEY='skills_editor_skeleton_v1';
+  const DEFAULT_DAMAGE_TYPES={physical:'物理',magical:'魔法'};
+  const DEFAULT_ATTACK_TYPES={normal:'普通',heavy:'重击',skill:'技能'};
+  const ENTRY_ORDER=['_id','_name','_debugSample','damageType','attackType','mpCost','cooldownSec','multiplier','autoCast','PositiveEffects','NegativeEffects'];
+
+  let data=[], selectedKey=null;
+  let damageTypeRef=null, attackTypeRef=null;
+
+  const listBody=document.getElementById('sListBody');
+  const detail=document.getElementById('sDetail');
+  const statEl=document.getElementById('sStat');
+  const searchInput=document.getElementById('sSearch');
+  const refStatus=document.getElementById('sRefStatus');
+
+  function normalizeEntry(key,obj){
+    obj=obj||{};
+    const out={
+      key:String(key),
+      _id:obj._id!=null?String(obj._id):String(key),
+      _name:obj._name!=null?String(obj._name):'',
+      _debugSample:!!obj._debugSample,
+      damageType:(obj.damageType==='magical'?'magical':'physical'),
+      attackType:(['normal','heavy','skill'].indexOf(obj.attackType)!==-1?obj.attackType:'normal'),
+      mpCost:Math.max(0,Math.floor(num(obj.mpCost,0))),
+      cooldownSec:Math.max(0,r2(obj.cooldownSec===undefined?1:obj.cooldownSec)),
+      multiplier:Math.max(0,r2(obj.multiplier===undefined?1:obj.multiplier)),
+      autoCast:obj.autoCast!==false,
+      PositiveEffects:normEffects(obj.PositiveEffects,POS_KEYS),
+      NegativeEffects:normEffects(obj.NegativeEffects,NEG_KEYS)
+    };
+    Object.keys(obj).forEach(function(k){ if(!(k in out)) out[k]=obj[k]; });
+    return out;
+  }
+  function defaultData(){
+    return [
+      normalizeEntry('s1',{_id:'s1',_name:'重击',_debugSample:true,damageType:'physical',attackType:'heavy',
+        mpCost:20,cooldownSec:3,multiplier:2.2,autoCast:true,
+        PositiveEffects:{AttackBoost:[['STR',15,true,false,0,5,0,0,0]]},
+        NegativeEffects:{MinorBleeding:[['',8,false,true,0,4,1,5,0]]}}),
+      normalizeEntry('s2',{_id:'s2',_name:'火球术',_debugSample:true,damageType:'magical',attackType:'skill',
+        mpCost:35,cooldownSec:6,multiplier:2.8,autoCast:false,
+        NegativeEffects:{Burn:[['',12,false,false,2,6,2,0,0]]}})
+    ];
+  }
+  function save(){ saveLS(LS_KEY,data); publish(); }
+  function currentItem(){ return data.find(function(d){ return d.key===selectedKey; })||null; }
+  function damageTypes(){ return damageTypeRef||DEFAULT_DAMAGE_TYPES; }
+  function attackTypes(){ return attackTypeRef||DEFAULT_ATTACK_TYPES; }
+  function damageLabel(k){ return damageTypes()[k]||k; }
+  function attackLabel(k){ return attackTypes()[k]||k; }
+  function damageValid(k){ return Object.prototype.hasOwnProperty.call(damageTypes(),k); }
+  function attackValid(k){ return Object.prototype.hasOwnProperty.call(attackTypes(),k); }
+
+  function publish(){
+    REG.skills=data.map(function(d){ return {key:d.key,name:d._name||''}; });
+    REG.counts.skills=data.length;
+    renderSkillDatalist();
+    updateGlobalStat();
+  }
+
+  /* --- 列表 --- */
+  function visibleRows(){
+    const q=searchInput.value.trim().toLowerCase();
+    if(!q) return data.slice();
+    return data.filter(function(d){
+      return [d.key,d._id,d._name,d.damageType,d.attackType].join(' ').toLowerCase().indexOf(q)!==-1;
+    });
+  }
+  function renderList(){
+    const rows=visibleRows();
+    listBody.innerHTML=rows.map(function(d){
+      const nPos=countUsedRows(d.PositiveEffects,POS_KEYS);
+      const nNeg=countUsedRows(d.NegativeEffects,NEG_KEYS);
+      const eff=(nPos||nNeg)?('<span class="eff-pill" title="已配置效果条目">+'+nPos+' / -'+nNeg+'</span>'):'<span class="dim">—</span>';
+      return '<tr data-key="'+esc(d.key)+'" draggable="true" class="'+(d.key===selectedKey?'selected':'')+'">'
+        +'<td class="drag">⠿</td><td class="dim">'+esc(d.key)+'</td><td class="dim">'+esc(d._id)+'</td>'
+        +'<td>'+esc(d._name||'')+'</td>'
+        +'<td class="'+(damageValid(d.damageType)?'dt-'+esc(d.damageType):'miss')+'">'+esc(damageLabel(d.damageType))+'</td>'
+        +'<td class="'+(attackValid(d.attackType)?'at-'+esc(d.attackType):'miss')+'">'+esc(attackLabel(d.attackType))+'</td>'
+        +'<td class="num">'+d.mpCost+'</td><td class="num">'+d.cooldownSec+'</td><td class="num">×'+d.multiplier+'</td>'
+        +'<td class="num">'+eff+'</td>'
+        +'<td class="dim">'+(d.autoCast?'✓':'')+'</td><td class="dim">'+(d._debugSample?'✓':'')+'</td></tr>';
+    }).join('');
+    statEl.textContent='共 '+data.length+' 条'+(rows.length!==data.length?' / 显示 '+rows.length:'');
+    publish();
+  }
+
+  /* --- 拖拽排序 --- */
+  let dragKey=null,dropTarget=null;
+  function clearDropMarkers(){ listBody.querySelectorAll('.drop-before,.drop-after').forEach(function(el){ el.classList.remove('drop-before','drop-after'); }); }
+  function moveItem(srcKey,tgtKey,after){
+    const si=data.findIndex(function(d){ return d.key===srcKey; }); if(si<0) return;
+    const it=data.splice(si,1)[0];
+    let ti=data.findIndex(function(d){ return d.key===tgtKey; });
+    if(ti<0){ data.splice(si,0,it); return; }
+    if(after) ti+=1;
+    data.splice(ti,0,it); save(); renderList();
+  }
+  listBody.addEventListener('dragstart',function(e){ const tr=e.target.closest('tr'); if(!tr||!tr.dataset.key) return; dragKey=tr.dataset.key; tr.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragKey);}catch(_){}});
+  listBody.addEventListener('dragover',function(e){ if(!dragKey) return; e.preventDefault(); e.dataTransfer.dropEffect='move';
+    const sc=listBody.closest('.left');
+    if(sc){ const r0=sc.getBoundingClientRect(); if(e.clientY<r0.top+48) sc.scrollTop-=14; else if(e.clientY>r0.bottom-48) sc.scrollTop+=14; }
+    const tr=e.target.closest('tr'); clearDropMarkers();
+    if(!tr||!tr.dataset.key||tr.dataset.key===dragKey){ dropTarget=null; return; }
+    const r=tr.getBoundingClientRect(); const after=(e.clientY-r.top)>r.height/2;
+    tr.classList.add(after?'drop-after':'drop-before'); dropTarget={key:tr.dataset.key,after}; });
+  listBody.addEventListener('drop',function(e){ if(!dragKey||!dropTarget) return; e.preventDefault(); const s=dragKey,t=dropTarget; dragKey=null;dropTarget=null;clearDropMarkers(); moveItem(s,t.key,t.after); });
+  listBody.addEventListener('dragend',function(){ dragKey=null;dropTarget=null;clearDropMarkers(); listBody.querySelectorAll('tr.dragging').forEach(function(el){ el.classList.remove('dragging'); }); });
+  listBody.addEventListener('click',function(e){ const tr=e.target.closest('tr'); if(!tr||!tr.dataset.key) return; if(tr.dataset.key===selectedKey) return; selectedKey=tr.dataset.key; renderList(); renderDetail(); });
+
+  /* --- 校验面板 --- */
+  function checkPanelHTML(item){
+    const errs=[],warns=[];
+    if(!damageValid(item.damageType)) errs.push('damageType "'+item.damageType+'" 不在伤害枚举中');
+    if(!attackValid(item.attackType)) errs.push('attackType "'+item.attackType+'" 不在攻击枚举中');
+    if(item.mpCost<0) errs.push('mpCost 不能为负');
+    if(item.cooldownSec<0) errs.push('cooldownSec 不能为负');
+    if(item.multiplier<=0) warns.push('multiplier 应 > 0，否则伤害为 0 或异常');
+    EFFECT_SECTIONS.forEach(function(s){
+      const bad=rowsMissingAttr(item[s.sec],s.keys);
+      if(bad.length) warns.push(s.title+' 有 '+bad.length+' 条已填数值但未选择战斗属性：'+bad.slice(0,5).join('、')+(bad.length>5?' 等':''));
+      const keys=Object.keys(item[s.sec]||{});
+      keys.forEach(function(k){
+        (item[s.sec][k]||[]).forEach(function(r){
+          if(r.attr&&COMBAT_KEYS.indexOf(r.attr)===-1) warns.push(s.title+' · '+k+' 的战斗属性 "'+r.attr+'" 不在 12 字段内');
+        });
+      });
+    });
+    const nPos=countUsedRows(item.PositiveEffects,POS_KEYS), nNeg=countUsedRows(item.NegativeEffects,NEG_KEYS);
+    let h='<div class="check-panel" id="sCheck">';
+    h+='<div class="row">效果条目：正向 <b>'+nPos+'</b> 条 · 负向 <b>'+nNeg+'</b> 条（导出格式：'+(prefs.effFormat?'命名对象':'9 位数组')+(prefs.skipZero?'，省略全零':'，全量输出')+'）。</div>';
+    errs.forEach(function(e){ h+='<div class="row err">⚠ '+esc(e)+'</div>'; });
+    warns.forEach(function(w){ h+='<div class="row warn">⚠ '+esc(w)+'</div>'; });
+    if(!errs.length&&!warns.length) h+='<div class="row ok">✓ 技能字段与效果矩阵校验通过。</div>';
+    else h+='<div class="row">这些不会阻止导出，但战斗时会按兜底逻辑处理或异常。</div>';
+    return h+'</div>';
+  }
+  function refreshCheck(){ const item=currentItem(); if(!item) return; const cp=detail.querySelector('#sCheck'); if(cp) cp.outerHTML=checkPanelHTML(item); }
+
+  /* --- 详情 --- */
+  function enumSelect(attr,map,cur){
+    const keys=Object.keys(map);
+    let h='<select '+attr+'>';
+    keys.forEach(function(k){ h+='<option value="'+esc(k)+'"'+(k===cur?' selected':'')+'>'+esc(map[k])+' ('+esc(k)+')</option>'; });
+    if(keys.indexOf(cur)===-1) h+='<option value="'+esc(cur)+'" selected>'+esc(cur)+'（未在枚举中）</option>';
+    return h+'</select>';
+  }
+  function renderDetail(){
+    const item=currentItem();
+    if(!item){ detail.innerHTML='<p class="hint">← 从左侧选择一个技能进行编辑</p>'; return; }
+    let h='';
+
+    h+='<div class="section-title">基本信息</div>';
+    h+=fieldText('Key（对象键）','data-root="key"',item.key);
+    h+='<div class="grid2">'+fieldText('_id（标识）','data-root="_id"',item._id)+fieldText('_name（名字）','data-root="_name"',item._name)+'</div>';
+    h+=boolHTML('data-root="_debugSample"','_debugSample（调试样例）',item._debugSample);
+
+    h+='<div class="section-title">攻击类型</div><div class="grid2">'
+      +'<div class="field"><label>damageType 伤害类型</label>'+enumSelect('data-root="damageType"',damageTypes(),item.damageType)
+      +'<div class="tagline">引用 damage_types.json；物理 / 魔法</div></div>'
+      +'<div class="field"><label>attackType 攻击类型</label>'+enumSelect('data-root="attackType"',attackTypes(),item.attackType)
+      +'<div class="tagline">引用 attack_types.json；普通 / 重击 / 技能</div></div></div>';
+
+    h+='<div class="section-title">数值</div><div class="grid3">'
+      +fieldNum('mpCost MP 消耗','data-num="mpCost"',item.mpCost,'1','0','≥ 0；MP 不足时不可用')
+      +fieldNum('cooldownSec 冷却秒','data-num="cooldownSec"',item.cooldownSec,'0.1','0','≥ 0；秒')
+      +fieldNum('multiplier 伤害倍率','data-num="multiplier"',item.multiplier,'0.1','0','> 0；乘在基础伤害上')
+      +'</div>';
+
+    h+='<div class="section-title">自动释放</div>';
+    h+=boolHTML('data-root="autoCast"','autoCast（自动释放）',item.autoCast);
+    h+='<div class="tagline">为 true 时，战斗循环会在冷却结束且 MP 足够时自动释放。</div>';
+
+    /* 效果矩阵：对战斗属性（12 字段）的数据影响 */
+    EFFECT_SECTIONS.forEach(function(s){
+      const used=countUsedRows(item[s.sec],s.keys);
+      h+='<div class="section-title">'+esc(s.title)+' <span class="r">已配置 '+used+' 条 · 可对 12 战斗属性施加影响</span></div>';
+      h+='<div class="eff-scroll"><div class="eff-inner">'+effHeadHTML();
+      s.keys.forEach(function(pair){ h+=effRowsHTML(s.sec,pair[0],pair[1],item[s.sec][pair[0]]||[],prefs.onlyUsed); });
+      h+='</div></div>';
+    });
+    h+=effLegendHTML();
+    h+=checkPanelHTML(item);
+
+    detail.innerHTML=h;
+  }
+
+  /* --- 编辑 --- */
+  function onEdit(e){
+    const el=e.target, item=currentItem(); if(!item) return;
+
+    /* 效果矩阵单元格 */
+    if(el.dataset&&el.dataset.effF){
+      const sec=el.dataset.effSec,key=el.dataset.effKey,idx=Number(el.dataset.effRow),f=el.dataset.effF;
+      const rows=item[sec]&&item[sec][key]; if(!rows||!rows[idx]) return;
+      const r=rows[idx];
+      if(f==='attr') r.attr=el.value;
+      else if(f==='pct'||f==='rem') r[f]=el.checked;
+      else r[f]=el.value===''?0:nz(el.value);
+      save(); renderList(); refreshCheck(); return;
+    }
+
+    if(el.dataset.root){
+      const k=el.dataset.root;
+      if(k==='key'){
+        if(e.type!=='change') return;
+        const nv=String(el.value).trim();
+        if(!nv){ el.value=item.key; return; }
+        if(nv===item.key) return;
+        if(data.some(function(d){ return d!==item&&d.key===nv; })){ alert('Key 已存在：'+nv); el.value=item.key; return; }
+        item.key=nv; if(!item._id||item._id===selectedKey) item._id=nv;
+        selectedKey=nv; renderList(); renderDetail(); save(); return;
+      }
+      if(k==='_debugSample'||k==='autoCast'){
+        item[k]=el.checked; renderList();
+        if(k==='_debugSample') renderDetail();
+        save(); return;
+      }
+      if(k==='damageType'||k==='attackType'){ item[k]=el.value; renderList(); renderDetail(); save(); return; }
+      item[k]=el.value; renderList(); save(); return;
+    }
+
+    if(el.dataset.num){
+      const k=el.dataset.num;
+      let v=el.value===''?0:Number(el.value); if(!isFinite(v)) v=0;
+      if(k==='mpCost') v=Math.max(0,Math.floor(v));
+      if(k==='cooldownSec'||k==='multiplier') v=Math.max(0,r2(v));
+      item[k]=v; renderList(); refreshCheck(); save(); return;
+    }
+  }
+  detail.addEventListener('input',onEdit);
+  detail.addEventListener('change',onEdit);
+  detail.addEventListener('click',function(e){
+    const item=currentItem(); if(!item) return;
+    const add=e.target.closest('[data-eff-add]');
+    if(add){
+      const parts=add.dataset.effAdd.split('|');
+      const rows=item[parts[0]][parts[1]], i=Number(parts[2]);
+      if(!rows) return;
+      rows.splice(i+1,0,cloneRow(rows[i]||zeroRow()));
+      save(); renderList(); renderDetail(); return;
+    }
+    const del=e.target.closest('[data-eff-del]');
+    if(del){
+      const parts=del.dataset.effDel.split('|');
+      const rows=item[parts[0]][parts[1]], i=Number(parts[2]);
+      if(!rows) return;
+      if(rows.length>1) rows.splice(i,1); else rows[0]=zeroRow();
+      save(); renderList(); renderDetail(); return;
+    }
+  });
+
+  /* --- 增删复制 --- */
+  function nextKey(){
+    let max=0;
+    data.forEach(function(d){ const m=String(d.key).match(/^s(\d+)$/); if(m) max=Math.max(max,parseInt(m[1],10)); });
+    return 's'+(max+1);
+  }
+  document.getElementById('sAddBtn').onclick=function(){
+    const key=nextKey();
+    data.push(normalizeEntry(key,{_id:key,_name:'新技能',_debugSample:false,damageType:'physical',attackType:'normal',mpCost:0,cooldownSec:1,multiplier:1,autoCast:true}));
+    selectedKey=key; renderList(); renderDetail(); save();
+  };
+  document.getElementById('sDupBtn').onclick=function(){
+    const src=currentItem(); if(!src) return;
+    const copy=JSON.parse(JSON.stringify(src));
+    copy.key=nextKey(); copy._id=copy.key; copy._name=(copy._name||'')+'_副本'; copy._debugSample=false;
+    data.push(copy); selectedKey=copy.key; renderList(); renderDetail(); save();
+  };
+  document.getElementById('sDelBtn').onclick=function(){
+    if(!selectedKey) return;
+    if(!confirm('确认删除技能 '+selectedKey+' ?\n（怪物 / 玩家中引用它的 skills 不会自动清理）')) return;
+    const idx=data.findIndex(function(d){ return d.key===selectedKey; }); if(idx<0) return;
+    data.splice(idx,1);
+    selectedKey=data.length?data[Math.min(idx,data.length-1)].key:null;
+    renderList(); renderDetail(); save();
+  };
+
+  /* --- 导入导出 --- */
+  const importFile=document.getElementById('sImportFile');
+  document.getElementById('sImportBtn').onclick=function(){ importFile.click(); };
+  pickFile(importFile,function(obj){
+    if(Array.isArray(obj)) data=obj.map(function(x,i){ return normalizeEntry(x.key!=null?x.key:('s'+(i+1)),x); });
+    else if(obj&&typeof obj==='object') data=Object.keys(obj).map(function(k){ return normalizeEntry(k,obj[k]); });
+    else throw new Error('根节点必须是对象或数组');
+    selectedKey=data.length?data[0].key:null;
+    renderList(); renderDetail(); save();
+    alert('已导入 '+data.length+' 条技能。');
+  });
+
+  function buildEntry(d){
+    const out={};
+    ENTRY_ORDER.forEach(function(k){
+      if(k==='_debugSample'){ if(d._debugSample) out[k]=true; return; }
+      if(k==='autoCast'){ out[k]=!!d.autoCast; return; }
+      if(k==='PositiveEffects'){ out[k]=effectsOut(d.PositiveEffects,POS_KEYS,prefs.effFormat,prefs.skipZero); return; }
+      if(k==='NegativeEffects'){ out[k]=effectsOut(d.NegativeEffects,NEG_KEYS,prefs.effFormat,prefs.skipZero); return; }
+      if(d[k]!==undefined&&d[k]!==null) out[k]=d[k];
+    });
+    Object.keys(d).forEach(function(k){
+      if(!(k in out)&&k!=='key'&&k!=='PositiveEffects'&&k!=='NegativeEffects') out[k]=d[k];
+    });
+    return out;
+  }
+  function buildJSONText(){
+    const parts=data.map(function(d){
+      return '  '+JSON.stringify(d.key)+': '+indentBlock(JSON.stringify(buildEntry(d),null,2),1);
+    });
+    return '{\n'+parts.join(',\n')+'\n}';
+  }
+  document.getElementById('sExportBtn').onclick=function(){ download('skills.json',buildJSONText()); };
+
+  /* --- 枚举参考 --- */
+  function updateRefStatus(){
+    const parts=[];
+    if(damageTypeRef) parts.push('伤害枚举 <span class="ok">'+Object.keys(damageTypeRef).length+'</span>');
+    if(attackTypeRef) parts.push('攻击枚举 <span class="ok">'+Object.keys(attackTypeRef).length+'</span>');
+    if(!parts.length){ refStatus.textContent='未加载（使用骨架兜底枚举）'; refStatus.className='hint'; }
+    else { refStatus.innerHTML='已加载：'+parts.join(' · '); refStatus.className='hint'; }
+  }
+  document.getElementById('sLoadDmgBtn').onclick=function(){ document.getElementById('sDmgFile').click(); };
+  document.getElementById('sLoadAtkBtn').onclick=function(){ document.getElementById('sAtkFile').click(); };
+  pickFile(document.getElementById('sDmgFile'),function(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw)){ alert('damage_types.json 结构应为 { "physical":"物理", ... }'); return; }
+    damageTypeRef={}; Object.keys(raw).forEach(function(k){ damageTypeRef[k]=String(raw[k]); });
+    updateRefStatus(); renderList(); renderDetail();
+  });
+  pickFile(document.getElementById('sAtkFile'),function(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw)){ alert('attack_types.json 结构应为 { "normal":"普通", ... }'); return; }
+    attackTypeRef={}; Object.keys(raw).forEach(function(k){ attackTypeRef[k]=String(raw[k]); });
+    updateRefStatus(); renderList(); renderDetail();
+  });
+  document.getElementById('sRevalidateBtn').onclick=function(){ renderList(); renderDetail(); };
+
+  /* --- 偏好开关 --- */
+  const cbFormat=document.getElementById('sEffFormat'), cbSkip=document.getElementById('sSkipZero'), cbOnly=document.getElementById('sOnlyUsed');
+  cbFormat.checked=!!prefs.effFormat; cbSkip.checked=!!prefs.skipZero; cbOnly.checked=!!prefs.onlyUsed;
+  cbFormat.addEventListener('change',function(){ prefs.effFormat=cbFormat.checked; saveLS(UI_KEY,prefs); refreshCheck(); });
+  cbSkip.addEventListener('change',function(){ prefs.skipZero=cbSkip.checked; saveLS(UI_KEY,prefs); refreshCheck(); });
+  cbOnly.addEventListener('change',function(){ prefs.onlyUsed=cbOnly.checked; saveLS(UI_KEY,prefs); renderDetail(); });
+  searchInput.addEventListener('input',renderList);
+
+  /* --- 启动 --- */
+  (function init(){
+    const parsed=loadLS(LS_KEY);
+    data=Array.isArray(parsed)&&parsed.length?parsed.map(function(d){ return normalizeEntry(d.key,d); }):defaultData();
+    selectedKey=data.length?data[0].key:null;
+    updateRefStatus(); renderList(); renderDetail();
+  })();
+
+  return {
+    renderList:renderList,
+    renderDetail:renderDetail,
+    onShow:function(){ renderList(); renderDetail(); },
+    exportJSON:function(){ download('skills.json',buildJSONText()); },
+    count:function(){ return data.length; }
+  };
+})();
+
+/* =========================================================
+   SECTION: 怪物模块
+   ========================================================= */
+MODULES.monsters=(function(){
+  const LS_KEY='monsters_editor_skeleton_v3';
+  const NUM_FIELDS=[
+    {k:'lv',label:'lv 等级',step:1,min:1,hint:'≥ 1'},
+    {k:'expBase',label:'expBase 基础经验',step:1,min:0,hint:'同级满收益基准，缺省 100'},
+    {k:'HP',label:'HP 生命值',step:1,min:1,hint:'≥ 1'},
+    {k:'MP',label:'MP 魔力值',step:1,min:0,hint:'≥ 0'},
+    {k:'STR',label:'STR 物理攻击',step:1,min:0,hint:'≥ 0'},
+    {k:'DEF',label:'DEF 物理防御',step:1,min:0,hint:'≥ 0'},
+    {k:'MGA',label:'MGA 魔法攻击',step:1,min:0,hint:'≥ 0'},
+    {k:'MGD',label:'MGD 魔法防御',step:1,min:0,hint:'≥ 0'},
+    {k:'SPD',label:'SPD 速度',step:1,min:1,hint:'秒/次 = 100 / SPD'},
+    {k:'CRT',label:'CRT 暴击基数',step:0.0001,min:0,hint:'派生用'},
+    {k:'T_CRT',label:'T_CRT 真暴击率',step:0.0001,min:0,hint:'= CRT × LUK × 0.01'},
+    {k:'LUK',label:'LUK 幸运',step:1,min:0,hint:'≥ 0'},
+    {k:'GP',label:'GP 成长力',step:0.1,min:0,hint:'不参与战斗结算'},
+    {k:'Cont',label:'Cont 控制抗性',step:0.1,min:0,hint:'0.5 = 0.5%'}
+  ];
+  const DAMAGE_TYPES=[{k:'physical',label:'物理'},{k:'magical',label:'魔法'}];
+  const ATTACK_TYPES=[{k:'normal',label:'普通'},{k:'heavy',label:'重击'},{k:'skill',label:'技能'}];
+  const DT_LABEL={physical:'物理',magical:'魔法'};
+  const AT_LABEL={normal:'普通',heavy:'重击',skill:'技能'};
+  const ENTRY_ORDER=['_id','_name','_debugSample','lv','expBase','HP','MP','STR','DEF','MGA','MGD','SPD','CRT','T_CRT','LUK','GP','Cont',
+    'damageType','attackType','skills','drops','dropGroups'];
+
+  const EXP_MULT_SEGMENTS=[
+    {min:21,max:40,from:0.69,to:0.51},{min:11,max:20,from:0.79,to:0.75},{min:10,max:10,from:0.95,to:0.95},
+    {min:5,max:9,from:1.00,to:1.00},{min:2,max:4,from:1.05,to:1.05},{min:-1,max:1,from:1.20,to:1.20},
+    {min:-4,max:-2,from:1.10,to:1.10},{min:-9,max:-5,from:1.05,to:1.05},{min:-20,max:-10,from:1.00,to:0.90},
+    {min:-35,max:-21,from:0.89,to:0.14},{min:-39,max:-36,from:0.10,to:0.10}
+  ];
+  const EXP_FIXED_HIGH=100, EXP_FIXED_LOW=100;
+  function expInfo(playerLv,enemyLv,baseExp){
+    const diff=(playerLv|0)-(enemyLv|0);
+    if(diff>40) return {diff:diff,fixed:true,exp:EXP_FIXED_HIGH,minExp:EXP_FIXED_HIGH,maxExp:EXP_FIXED_HIGH,mult:null};
+    if(diff<=-40) return {diff:diff,fixed:true,exp:EXP_FIXED_LOW,minExp:EXP_FIXED_LOW,maxExp:EXP_FIXED_LOW,mult:null};
+    for(let i=0;i<EXP_MULT_SEGMENTS.length;i++){
+      const seg=EXP_MULT_SEGMENTS[i];
+      if(diff<seg.min||diff>seg.max) continue;
+      let mult;
+      if(seg.max===seg.min) mult=seg.from;
+      else { const t=(diff-seg.min)/(seg.max-seg.min); mult=seg.from+(seg.to-seg.from)*t; }
+      return {diff:diff,fixed:false,exp:Math.round(baseExp*mult),
+        minExp:Math.max(1,Math.round(baseExp*mult*0.95)),maxExp:Math.max(1,Math.round(baseExp*mult*1.05)),mult:mult};
+    }
+    return {diff:diff,fixed:false,exp:baseExp,minExp:baseExp,maxExp:baseExp,mult:1};
+  }
+
+  let data=[],selectedKey=null,itemsRef=null,previewPlayerLv=1;
+  const listBody=document.getElementById('mListBody'), detail=document.getElementById('mDetail'),
+    statEl=document.getElementById('mStat'), searchInput=document.getElementById('mSearch'),
+    fLvMin=document.getElementById('mLvMin'), fLvMax=document.getElementById('mLvMax'),
+    fDamageType=document.getElementById('mFDamageType'), fAttackType=document.getElementById('mFAttackType'),
+    itemsStatus=document.getElementById('mItemsStatus'), clearItemsBtn=document.getElementById('mClearItemsBtn'),
+    itemList=document.getElementById('mItemList');
+  const triStates=[];
+
+  function normDrop(d){
+    if(!d||typeof d!=='object') return null;
+    const itemId=String(d.itemId==null?'':d.itemId).trim(); if(!itemId) return null;
+    let chance=Number(d.chance); if(!isFinite(chance)) chance=1;
+    chance=Math.max(0,Math.min(1,chance));
+    let min=Math.floor(num(d.min,1)); if(min<1) min=1;
+    let max=Math.floor(num(d.max,min)); if(max<min) max=min;
+    return {itemId:itemId,chance:chance,min:min,max:max};
+  }
+  function normGroupItem(x){
+    if(!x||typeof x!=='object') return null;
+    const itemId=String(x.itemId==null?'':x.itemId).trim(); if(!itemId) return null;
+    let min=Math.floor(num(x.min,1)); if(min<1) min=1;
+    let max=Math.floor(num(x.max,min)); if(max<min) max=min;
+    let weight=num(x.weight,1); if(!(weight>=0)) weight=1;
+    return {itemId:itemId,min:min,max:max,weight:weight};
+  }
+  function normGroup(g){
+    if(!g||typeof g!=='object') return null;
+    let chance=Number(g.chance); if(!isFinite(chance)) chance=0;
+    chance=Math.max(0,Math.min(1,chance));
+    const items=Array.isArray(g.items)?g.items.map(normGroupItem).filter(Boolean):[];
+    return {name:String(g.name==null?'':g.name),chance:chance,mode:(g.mode==='one'?'one':'all'),items:items};
+  }
+  function normSkillList(v){
+    if(!Array.isArray(v)) return [];
+    return v.map(function(x){
+      if(x==null) return '';
+      if(typeof x==='object') return String(x.skillId!=null?x.skillId:(x.key!=null?x.key:(x.id!=null?x.id:''))).trim();
+      return String(x).trim();
+    }).filter(Boolean);
+  }
+  function normalizeEntry(key,obj){
+    obj=obj||{};
+    const out={
+      key:String(key),
+      _id:obj._id!=null?String(obj._id):String(key),
+      _name:obj._name!=null?String(obj._name):'',
+      _debugSample:!!obj._debugSample,
+      lv:Math.max(1,Math.floor(num(obj.lv,1))),
+      expBase:Math.max(0,Math.floor(num(obj.expBase,100))),
+      HP:Math.max(1,Math.floor(num(obj.HP,10))),
+      MP:Math.max(0,Math.floor(num(obj.MP,0))),
+      STR:Math.max(0,Math.floor(num(obj.STR,10))),
+      DEF:Math.max(0,Math.floor(num(obj.DEF,10))),
+      MGA:Math.max(0,Math.floor(num(obj.MGA,0))),
+      MGD:Math.max(0,Math.floor(num(obj.MGD,0))),
+      SPD:Math.max(1,Math.floor(num(obj.SPD,80))),
+      CRT:Math.max(0,num(obj.CRT,1.0001)),
+      T_CRT:Math.max(0,num(obj.T_CRT,1.0001)),
+      LUK:Math.max(0,Math.floor(num(obj.LUK,10))),
+      GP:Math.max(0,num(obj.GP,1)),
+      Cont:Math.max(0,num(obj.Cont,0)),
+      damageType:(obj.damageType==='magical'?'magical':'physical'),
+      attackType:(['normal','heavy','skill'].indexOf(obj.attackType)!==-1?obj.attackType:'normal'),
+      skills:normSkillList(obj.skills),
+      drops:Array.isArray(obj.drops)?obj.drops.map(normDrop).filter(Boolean):[],
+      dropGroups:Array.isArray(obj.dropGroups)?obj.dropGroups.map(normGroup).filter(Boolean):[]
+    };
+    Object.keys(obj).forEach(function(k){ if(!(k in out)) out[k]=obj[k]; });
+    return out;
+  }
+  function defaultData(){
+    return [normalizeEntry('m1',{
+      _id:'m1',_name:'史莱姆',_debugSample:true,
+      lv:1,expBase:120,HP:10,MP:0,STR:10,DEF:10,MGA:0,MGD:0,SPD:80,CRT:1.0001,T_CRT:1.0001,LUK:10,GP:1,Cont:0,
+      damageType:'physical',attackType:'normal',skills:['s1'],
+      drops:[{itemId:'100001',chance:0.30,min:1,max:2},{itemId:'200001',chance:0.15,min:1,max:1}],
+      dropGroups:[
+        {name:'材料组',chance:0.2,mode:'all',items:[{itemId:'200001',min:1,max:3,weight:1}]},
+        {name:'装备组',chance:0.05,mode:'one',items:[{itemId:'300001',min:1,max:1,weight:1},{itemId:'300101',min:1,max:1,weight:1}]}
+      ]})];
+  }
+  function save(){ saveLS(LS_KEY,data); REG.counts.monsters=data.length; updateGlobalStat(); }
+  function currentItem(){ return data.find(function(d){ return d.key===selectedKey; })||null; }
+
+  /* items 参考 */
+  function hasItemsData(){ return itemsRef!==null; }
+  function itemsExists(id){ return !hasItemsData()||!!itemsRef[id]; }
+  function itemDisplayName(id){
+    if(!hasItemsData()) return '';
+    const it=itemsRef[id]; if(!it) return '';
+    return (it._props&&it._props.Name)||it._name||id;
+  }
+  function renderItemDatalist(){
+    if(!hasItemsData()){ itemList.innerHTML=''; return; }
+    itemList.innerHTML=Object.keys(itemsRef).map(function(id){
+      return '<option value="'+esc(id)+'">'+esc(itemDisplayName(id))+'</option>';
+    }).join('');
+  }
+  function applyItemsTable(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw)){ alert('items.json 根节点必须是对象'); return; }
+    itemsRef=raw;
+    itemsStatus.textContent='已加载 '+Object.keys(raw).length+' 条 items'; itemsStatus.className='ok';
+    clearItemsBtn.disabled=false; renderItemDatalist(); renderList(); renderDetail();
+  }
+  function clearItemsTable(){
+    itemsRef=null; itemsStatus.textContent='未加载'; itemsStatus.className='hint';
+    clearItemsBtn.disabled=true; renderItemDatalist(); renderList(); renderDetail();
+  }
+
+  /* 筛选 */
+  function fillFilters(){
+    fDamageType.innerHTML='<option value="">全部</option>'+DAMAGE_TYPES.map(function(v){ return '<option value="'+esc(v.k)+'">'+esc(v.label)+'</option>'; }).join('');
+    fAttackType.innerHTML='<option value="">全部</option>'+ATTACK_TYPES.map(function(v){ return '<option value="'+esc(v.k)+'">'+esc(v.label)+'</option>'; }).join('');
+  }
+  function visibleRows(){
+    const q=searchInput.value.trim().toLowerCase();
+    const lvMin=fLvMin.value===''?-Infinity:Number(fLvMin.value);
+    const lvMax=fLvMax.value===''?Infinity:Number(fLvMax.value);
+    return data.filter(function(d){
+      if(q&&[d.key,d._id,d._name,(d.skills||[]).join(' ')].join(' ').toLowerCase().indexOf(q)===-1) return false;
+      if(d.lv<lvMin||d.lv>lvMax) return false;
+      if(fDamageType.value&&d.damageType!==fDamageType.value) return false;
+      if(fAttackType.value&&d.attackType!==fAttackType.value) return false;
+      for(let i=0;i<triStates.length;i++){
+        const t=triStates[i]; if(t.state==='all') continue;
+        const v=t.key==='_hasSkill'?!!(d.skills&&d.skills.length):!!d[t.key];
+        if(t.state==='on'&&!v) return false;
+        if(t.state==='off'&&v) return false;
+      }
+      return true;
+    });
+  }
+  function renderList(){
+    const rows=visibleRows();
+    listBody.innerHTML=rows.map(function(d){
+      const dropCount=(d.drops||[]).length, gCount=(d.dropGroups||[]).length, sk=(d.skills||[]).length;
+      return '<tr data-key="'+esc(d.key)+'" draggable="true" class="'+(d.key===selectedKey?'selected':'')+'">'
+        +'<td class="drag">⠿</td><td class="dim">'+esc(d.key)+'</td><td class="dim">'+esc(d._id)+'</td>'
+        +'<td>'+esc(d._name||'')+'</td>'
+        +'<td><span class="lv-pill">'+d.lv+'</span></td><td><span class="exp-pill">'+(d.expBase!=null?d.expBase:0)+'</span></td>'
+        +'<td class="num">'+d.HP+'</td><td class="num">'+d.STR+'</td><td class="num">'+d.DEF+'</td><td class="num">'+d.SPD+'</td>'
+        +'<td class="dt-'+esc(d.damageType)+'">'+esc(DT_LABEL[d.damageType]||d.damageType)+'</td>'
+        +'<td class="at-'+esc(d.attackType)+'">'+esc(AT_LABEL[d.attackType]||d.attackType)+'</td>'
+        +'<td class="num">'+(sk?'<span class="sk-pill" title="'+esc((d.skills||[]).join(', '))+'">'+sk+'</span>':'<span class="dim">—</span>')+'</td>'
+        +'<td class="num">'+((dropCount||gCount)?(dropCount+(gCount?'<span class="dim">+'+gCount+'组</span>':'')):'<span class="dim">—</span>')+'</td>'
+        +'<td class="dim">'+(d._debugSample?'✓':'')+'</td></tr>';
+    }).join('');
+    statEl.textContent='共 '+data.length+' 条'+(rows.length!==data.length?' / 显示 '+rows.length:'');
+    REG.counts.monsters=data.length; updateGlobalStat();
+  }
+
+  /* 拖拽 */
+  let dragKey=null,dropTarget=null;
+  function clearDropMarkers(){ listBody.querySelectorAll('.drop-before,.drop-after').forEach(function(el){ el.classList.remove('drop-before','drop-after'); }); }
+  function moveItem(srcKey,tgtKey,after){
+    const si=data.findIndex(function(d){ return d.key===srcKey; }); if(si<0) return;
+    const it=data.splice(si,1)[0];
+    let ti=data.findIndex(function(d){ return d.key===tgtKey; });
+    if(ti<0){ data.splice(si,0,it); return; }
+    if(after) ti+=1;
+    data.splice(ti,0,it); save(); renderList();
+  }
+  listBody.addEventListener('dragstart',function(e){ const tr=e.target.closest('tr'); if(!tr||!tr.dataset.key) return; dragKey=tr.dataset.key; tr.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragKey);}catch(_){}});
+  listBody.addEventListener('dragover',function(e){ if(!dragKey) return; e.preventDefault(); e.dataTransfer.dropEffect='move';
+    const sc=listBody.closest('.left');
+    if(sc){ const r0=sc.getBoundingClientRect(); if(e.clientY<r0.top+48) sc.scrollTop-=14; else if(e.clientY>r0.bottom-48) sc.scrollTop+=14; }
+    const tr=e.target.closest('tr'); clearDropMarkers();
+    if(!tr||!tr.dataset.key||tr.dataset.key===dragKey){ dropTarget=null; return; }
+    const r=tr.getBoundingClientRect(); const after=(e.clientY-r.top)>r.height/2;
+    tr.classList.add(after?'drop-after':'drop-before'); dropTarget={key:tr.dataset.key,after}; });
+  listBody.addEventListener('drop',function(e){ if(!dragKey||!dropTarget) return; e.preventDefault(); const s=dragKey,t=dropTarget; dragKey=null;dropTarget=null;clearDropMarkers(); moveItem(s,t.key,t.after); });
+  listBody.addEventListener('dragend',function(){ dragKey=null;dropTarget=null;clearDropMarkers(); listBody.querySelectorAll('tr.dragging').forEach(function(el){ el.classList.remove('dragging'); }); });
+  listBody.addEventListener('click',function(e){ const tr=e.target.closest('tr'); if(!tr||!tr.dataset.key) return; if(tr.dataset.key===selectedKey) return; selectedKey=tr.dataset.key; renderList(); renderDetail(); });
+
+  /* 掉落 / 物品组 / 经验 面板 */
+  function renderDropTable(item){
+    const drops=item.drops||[];
+    if(!drops.length) return '<div class="empty">暂无掉落。点击「＋ 添加掉落」开始。</div>';
+    const rows=drops.map(function(d,i){
+      const miss=hasItemsData()&&!itemsExists(d.itemId);
+      const chancePct=+((d.chance!=null?d.chance:1)*100).toFixed(4);
+      return '<tr data-drop-idx="'+i+'" class="'+(miss?'missing':'')+'">'
+        +'<td><input type="text" data-drop="itemId" data-idx="'+i+'" value="'+esc(d.itemId)+'" list="mItemList"></td>'
+        +'<td class="name">'+esc(itemDisplayName(d.itemId))+(miss?' ⚠':'')+'</td>'
+        +'<td><input type="number" data-drop="chance" data-idx="'+i+'" value="'+chancePct+'" min="0" max="100" step="0.01"></td>'
+        +'<td><input type="number" data-drop="min" data-idx="'+i+'" value="'+d.min+'" min="1" step="1"></td>'
+        +'<td><input type="number" data-drop="max" data-idx="'+i+'" value="'+d.max+'" min="1" step="1"></td>'
+        +'<td><button type="button" class="del" data-del-drop="'+i+'">删</button></td></tr>';
+    }).join('');
+    return '<table class="drop-table"><thead><tr><th style="width:30%">itemId</th><th style="width:24%">物品名</th>'
+      +'<th style="width:14%">概率%</th><th style="width:12%">min</th><th style="width:12%">max</th><th style="width:8%"></th></tr></thead><tbody>'
+      +rows+'</tbody></table>';
+  }
+  function renderDropCheck(item){
+    if(!hasItemsData()) return '<div class="check-panel" id="mDropCheck"><div class="row">未加载 items.json，跳过掉落引用校验。</div></div>';
+    const drops=item.drops||[];
+    if(!drops.length) return '<div class="check-panel" id="mDropCheck"><div class="row">未配置掉落。</div></div>';
+    const miss=drops.filter(function(d){ return !itemsExists(d.itemId); }).map(function(d){ return d.itemId; });
+    const badChance=drops.filter(function(d){ return !(d.chance>=0&&d.chance<=1); }).length;
+    const badRange=drops.filter(function(d){ return d.min<1||d.max<d.min; }).length;
+    const lines=['<div class="row">共 <b>'+drops.length+'</b> 条掉落配置。</div>'];
+    if(miss.length) lines.push('<div class="row err">缺失 itemId：'+esc(Array.from(new Set(miss)).join(', '))+'</div>');
+    if(badChance) lines.push('<div class="row err">'+badChance+' 条概率超出 0~1（UI 显示为 0~100%）。</div>');
+    if(badRange) lines.push('<div class="row err">'+badRange+' 条数量区间非法（min ≥ 1 且 max ≥ min）。</div>');
+    if(!miss.length&&!badChance&&!badRange) lines.push('<div class="row ok">✓ 掉落配置全部有效。</div>');
+    return '<div class="check-panel" id="mDropCheck">'+lines.join('')+'</div>';
+  }
+  function renderGroupCheck(item){
+    const gs=item.dropGroups||[];
+    if(!gs.length) return '<div class="check-panel" id="mGroupCheck"><div class="row">未配置物品组。</div></div>';
+    const lines=['<div class="row">共 <b>'+gs.length+'</b> 个物品组。</div>'];
+    let miss=0,badChance=0,badRange=0,badWeight=0,empty=0;
+    gs.forEach(function(g){
+      if(!g.items.length) empty++;
+      if(!(g.chance>=0&&g.chance<=1)) badChance++;
+      g.items.forEach(function(it){
+        if(hasItemsData()&&!itemsExists(it.itemId)) miss++;
+        if(it.min<1||it.max<it.min) badRange++;
+        if(g.mode==='one'&&!(it.weight>0)) badWeight++;
+      });
+    });
+    if(miss) lines.push('<div class="row err">'+miss+' 个组内 itemId 缺失。</div>');
+    if(badChance) lines.push('<div class="row err">'+badChance+' 组概率超出 0~100%。</div>');
+    if(badRange) lines.push('<div class="row err">'+badRange+' 条数量区间非法。</div>');
+    if(badWeight) lines.push('<div class="row err">'+badWeight+' 条「随机一件」权重需 &gt; 0。</div>');
+    if(empty) lines.push('<div class="row err">'+empty+' 个组为空（不会掉落）。</div>');
+    if(!miss&&!badChance&&!badRange&&!badWeight&&!empty) lines.push('<div class="row ok">✓ 物品组配置全部有效。</div>');
+    return '<div class="check-panel" id="mGroupCheck">'+lines.join('')+'</div>';
+  }
+  function renderGroups(item){
+    const gs=item.dropGroups||[];
+    let h='<div class="section-title">掉落物品组 dropGroups <span class="r">每组独立 roll · 概率精确到 0.000%</span></div>';
+    h+='<div class="tagline" style="margin-bottom:6px">命中某组后：「全部掉落」掉组内所有物品；「随机一件」按权重抽 1 件。各组概率相互独立、可叠加。</div>';
+    if(!gs.length) h+='<div class="empty">暂无物品组。点击「＋ 添加物品组」。</div>';
+    gs.forEach(function(g,gi){
+      h+='<div class="group-card"><div class="group-head">'
+        +'<input type="text" data-gname data-gidx="'+gi+'" value="'+esc(g.name)+'" placeholder="组名（可选）">'
+        +'<label class="g-prob">概率% <input type="number" data-gchance data-gidx="'+gi+'" value="'+(g.chance*100).toFixed(3)+'" min="0" max="100" step="0.001"></label>'
+        +'<select data-gmode data-gidx="'+gi+'">'
+        +'<option value="all"'+(g.mode!=='one'?' selected':'')+'>全部掉落</option>'
+        +'<option value="one"'+(g.mode==='one'?' selected':'')+'>随机一件(权重)</option></select>'
+        +'<button type="button" class="del" data-del-group="'+gi+'">删组</button></div>';
+      if(!g.items.length) h+='<div class="empty">组内暂无物品。</div>';
+      else {
+        const rows=g.items.map(function(it,ii){
+          const miss=hasItemsData()&&!itemsExists(it.itemId);
+          return '<tr class="'+(miss?'missing':'')+'">'
+            +'<td><input type="text" data-gitem="itemId" data-gidx="'+gi+'" data-iidx="'+ii+'" value="'+esc(it.itemId)+'" list="mItemList"></td>'
+            +'<td class="name">'+esc(itemDisplayName(it.itemId))+(miss?' ⚠':'')+'</td>'
+            +'<td><input type="number" data-gitem="min" data-gidx="'+gi+'" data-iidx="'+ii+'" value="'+it.min+'" min="1" step="1"></td>'
+            +'<td><input type="number" data-gitem="max" data-gidx="'+gi+'" data-iidx="'+ii+'" value="'+it.max+'" min="1" step="1"></td>'
+            +'<td><input type="number" data-gitem="weight" data-gidx="'+gi+'" data-iidx="'+ii+'" value="'+it.weight+'" min="0" step="0.1"'+(g.mode==='one'?'':' disabled')+'></td>'
+            +'<td><button type="button" class="del" data-del-gitem data-gidx="'+gi+'" data-iidx="'+ii+'">删</button></td></tr>';
+        }).join('');
+        h+='<table class="drop-table"><thead><tr><th style="width:30%">itemId</th><th style="width:24%">物品名</th><th style="width:12%">min</th><th style="width:12%">max</th><th style="width:14%">权重</th><th style="width:8%"></th></tr></thead><tbody>'+rows+'</tbody></table>';
+      }
+      h+='<div class="drop-actions"><button type="button" class="mini" data-add-gitem="'+gi+'">＋ 组内添加物品</button></div></div>';
+    });
+    h+='<div class="drop-actions"><button type="button" class="mini" data-add-group="1">＋ 添加物品组</button></div>';
+    h+=renderGroupCheck(item);
+    return h;
+  }
+  function renderExpPreview(item){
+    const baseExp=item.expBase||0;
+    const info=expInfo(previewPlayerLv,item.lv,baseExp);
+    const diff=info.diff;
+    const diffLabel=diff>0?('+'+diff):(diff<0?String(diff):'0');
+    let body;
+    if(info.fixed) body='<div class="row fixed">diff = <b>'+diffLabel+'</b> → 固定 <b>'+info.exp+'</b> exp（不吃 expBase，不吃随机浮动）</div>';
+    else {
+      const pct=(info.mult*100).toFixed(1);
+      body='<div class="row">diff = <b>'+diffLabel+'</b> · 系数 <b>'+pct+'%</b> · 期望 <b>'+info.exp+'</b> exp · 区间 <b>'+info.minExp+' ~ '+info.maxExp+'</b></div>';
+    }
+    if(baseExp===0) body+='<div class="row bad">expBase 为 0，击杀无经验。</div>';
+    return '<div class="exp-panel" id="mExpPreview">'+body
+      +'<div class="row" style="font-size:11px;color:#8A7AAE">公式：exp = expBase × 系数 × rand(0.95~1.05)；系数按 diff 分段线性插值。</div></div>';
+  }
+  function renderSkillCheck(item){
+    const list=item.skills||[];
+    let h='<div class="check-panel" id="mSkillCheck">';
+    if(!list.length) return h+'<div class="row">未配置技能，该怪物只用普攻（damageType / attackType）。</div></div>';
+    const unknown=REG.skills.length?list.filter(function(id){ return !REG.hasSkill(id); }):[];
+    h+='<div class="row">已选 <b>'+list.length+'</b> 个技能：'+esc(list.map(function(id){ return id+(REG.skillName(id)?'（'+REG.skillName(id)+'）':''); }).join('、'))+'</div>';
+    if(unknown.length) h+='<div class="row err">⚠ 技能表中找不到：'+esc(unknown.join(', '))+'（切到「技能」页签确认 key，或导入 skills.json）</div>';
+    else h+='<div class="row ok">✓ 全部技能引用有效。</div>';
+    return h+'</div>';
+  }
+  function refreshDerived(item){
+    const hint=detail.querySelector('.derived');
+    if(hint) hint.innerHTML='T_CRT 校验：<b>CRT × LUK × 0.01</b> = '+item.CRT+' × '+item.LUK+' × 0.01 = <b>'+(nz(item.CRT)*nz(item.LUK)*0.01).toFixed(4)+'</b>'
+      +' &nbsp;·&nbsp; 暴击率 = clamp(T_CRT × 0.05, 0.02, 0.75) = <b>'+(critChance(item.T_CRT)*100).toFixed(2)+'%</b>';
+  }
+
+  function renderDetail(){
+    const item=currentItem();
+    if(!item){ detail.innerHTML='<p class="hint">← 从左侧选择一条怪物进行编辑</p>'; return; }
+    let h='';
+    h+='<div class="section-title">基本信息</div>';
+    h+=fieldText('Key（对象键）','data-root="key"',item.key);
+    h+='<div class="grid2">'+fieldText('_id（标识）','data-root="_id"',item._id)+fieldText('_name（名称）','data-root="_name"',item._name)+'</div>';
+    h+=boolHTML('data-root="_debugSample"','_debugSample（调试样例）',item._debugSample);
+
+    h+='<div class="section-title">等级与经验</div><div class="grid2">'
+      +numFieldHTML(NUM_FIELDS[0],item.lv)+numFieldHTML(NUM_FIELDS[1],item.expBase)+'</div>';
+
+    h+='<div class="section-title">战斗属性（12 字段）</div><div class="grid4">';
+    for(let i=2;i<NUM_FIELDS.length;i++) h+=numFieldHTML(NUM_FIELDS[i],item[NUM_FIELDS[i].k]);
+    h+='</div>';
+    h+='<div class="derived">T_CRT 校验：<b>CRT × LUK × 0.01</b> = '+item.CRT+' × '+item.LUK+' × 0.01 = <b>'+(nz(item.CRT)*nz(item.LUK)*0.01).toFixed(4)+'</b>'
+      +' &nbsp;·&nbsp; 暴击率 = clamp(T_CRT × 0.05, 0.02, 0.75) = <b>'+(critChance(item.T_CRT)*100).toFixed(2)+'%</b></div>';
+    h+='<button type="button" class="mini" data-recalc="1" style="margin-top:6px">按公式重算 T_CRT</button>';
+
+    h+='<div class="section-title">攻击属性（对手面板）</div><div class="grid2">'
+      +fieldSelect('伤害类型 damageType','data-root="damageType"',DAMAGE_TYPES,item.damageType,false)
+      +fieldSelect('攻击类型 attackType','data-root="attackType"',ATTACK_TYPES,item.attackType,false)
+      +'</div>';
+
+    /* 新增：怪物可用技能 */
+    h+='<div class="section-title">可用技能 skills <span class="r">怪物也可以释放技能</span></div>';
+    h+=skillPickerHTML('m',item);
+    h+=renderSkillCheck(item);
+
+    h+='<div class="section-title">经验预估 <span class="r">只读预览，不写入数据</span></div>';
+    h+='<div class="field"><label>玩家等级（仅用于预览）</label><input type="number" id="mPreviewLv" value="'+previewPlayerLv+'" min="1" step="1"></div>';
+    h+=renderExpPreview(item);
+
+    h+='<div class="section-title">掉落 drops <span class="r">概率按每条独立 roll</span></div>';
+    h+=renderDropTable(item);
+    h+='<div class="drop-actions"><button type="button" class="mini" data-add-drop="1">＋ 添加掉落</button>'
+      +'<span class="tagline">chance 是 0~100%；min/max 是数量闭区间。</span></div>';
+    h+=renderDropCheck(item);
+    h+=renderGroups(item);
+
+    detail.innerHTML=h;
+
+    const lvInput=document.getElementById('mPreviewLv');
+    if(lvInput){
+      lvInput.addEventListener('input',function(){
+        const v=Number(lvInput.value);
+        previewPlayerLv=(isFinite(v)&&v>=1)?Math.floor(v):1;
+        const box=document.getElementById('mExpPreview'); if(box) box.outerHTML=renderExpPreview(item);
+      });
+      lvInput.addEventListener('change',function(){ lvInput.value=previewPlayerLv; });
+    }
+    detail.querySelectorAll('[data-drop]').forEach(function(el){ el.addEventListener('input',onDropEdit); el.addEventListener('change',onDropEdit); });
+  }
+
+  function onDropEdit(e){
+    const el=e.target, f=el.dataset.drop; if(!f) return;
+    const item=currentItem(); if(!item) return;
+    const i=Number(el.dataset.idx), d=item.drops[i]; if(!d) return;
+    if(f==='itemId'){
+      d.itemId=String(el.value).trim();
+      if(e.type==='change'){ save(); renderList(); renderDetail(); } else save();
+      return;
+    }
+    let v=el.value===''?0:Number(el.value); if(!isFinite(v)) v=0;
+    if(f==='chance'){ v=Math.max(0,Math.min(100,v)); d.chance=+(v/100).toFixed(6); }
+    else if(f==='min'){ v=Math.max(1,Math.floor(v)); d.min=v; if(d.max<d.min) d.max=d.min; }
+    else if(f==='max'){ v=Math.max(1,Math.floor(v)); d.max=Math.max(v,d.min); }
+    save();
+    const cp=document.getElementById('mDropCheck'); if(cp) cp.outerHTML=renderDropCheck(item);
+    if(f==='min'||f==='max'){
+      const row=el.closest('tr');
+      if(row){
+        const mi=row.querySelector('[data-drop="min"]'), ma=row.querySelector('[data-drop="max"]');
+        if(mi) mi.value=d.min; if(ma) ma.value=d.max;
+      }
+    }
+  }
+
+  function onEdit(e){
+    const el=e.target, item=currentItem(); if(!item) return;
+
+    /* 技能选择 */
+    if(el.dataset.mSkillIdx!==undefined){
+      const i=Number(el.dataset.mSkillIdx);
+      item.skills[i]=String(el.value).trim();
+      if(e.type==='change'){ item.skills=item.skills.filter(Boolean); save(); renderList(); renderDetail(); }
+      else save();
+      return;
+    }
+
+    if(el.dataset.root){
+      const k=el.dataset.root;
+      if(k==='key'){
+        if(e.type!=='change') return;
+        const nv=String(el.value).trim();
+        if(!nv){ el.value=item.key; return; }
+        if(nv===item.key) return;
+        if(data.some(function(d){ return d!==item&&d.key===nv; })){ alert('Key 已存在：'+nv); el.value=item.key; return; }
+        item.key=nv; if(!item._id||item._id===selectedKey) item._id=nv;
+        selectedKey=nv; renderList(); renderDetail(); save(); return;
+      }
+      if(k==='_debugSample'){ item._debugSample=el.checked; renderDetail(); renderList(); save(); return; }
+      if(k==='damageType'||k==='attackType'){ item[k]=el.value; renderList(); renderDetail(); save(); return; }
+      item[k]=el.value; renderList(); save(); return;
+    }
+
+    if(el.dataset.num){
+      const k=el.dataset.num;
+      let v=el.value===''?0:Number(el.value); if(!isFinite(v)) v=0;
+      if(k==='lv'||k==='HP'||k==='SPD') v=Math.max(1,Math.floor(v));
+      if(k==='expBase'||k==='MP'||k==='MGA'||k==='MGD'||k==='STR'||k==='DEF'||k==='LUK') v=Math.max(0,Math.floor(v));
+      item[k]=v;
+      if(k==='CRT'||k==='LUK'||k==='T_CRT') refreshDerived(item);
+      if(k==='lv'||k==='expBase'){ const box=document.getElementById('mExpPreview'); if(box) box.outerHTML=renderExpPreview(item); }
+      renderList(); save(); return;
+    }
+
+    /* 物品组 */
+    if(el.dataset.gidx!==undefined){
+      const gi=Number(el.dataset.gidx), g=item.dropGroups[gi]; if(!g) return;
+      if(el.dataset.gname!==undefined){ g.name=el.value; save(); return; }
+      if(el.dataset.gchance!==undefined){
+        let v=el.value===''?0:Number(el.value); if(!isFinite(v)) v=0;
+        v=Math.max(0,Math.min(100,v)); v=Math.round(v*1000)/1000; g.chance=v/100;
+        save(); refreshPanel('mGroupCheck',renderGroupCheck(item)); return;
+      }
+      if(el.dataset.gmode!==undefined){ g.mode=el.value==='one'?'one':'all'; save(); renderDetail(); return; }
+      if(el.dataset.gitem){
+        const ii=Number(el.dataset.iidx), it=g.items[ii]; if(!it) return;
+        const f=el.dataset.gitem;
+        if(f==='itemId'){ it.itemId=String(el.value).trim(); if(e.type==='change'){ save(); renderList(); renderDetail(); } else save(); return; }
+        let v=el.value===''?0:Number(el.value); if(!isFinite(v)) v=0;
+        if(f==='min'){ v=Math.max(1,Math.floor(v)); it.min=v; if(it.max<it.min) it.max=it.min; }
+        else if(f==='max'){ v=Math.max(1,Math.floor(v)); it.max=Math.max(v,it.min); }
+        else if(f==='weight'){ it.weight=Math.max(0,v); }
+        save(); refreshPanel('mGroupCheck',renderGroupCheck(item));
+        const row=el.closest('tr');
+        if(row&&(f==='min'||f==='max')){
+          const mi=row.querySelector('[data-gitem="min"]'),ma=row.querySelector('[data-gitem="max"]');
+          if(mi) mi.value=it.min; if(ma) ma.value=it.max;
+        }
+      }
+    }
+  }
+  function refreshPanel(id,html){ const cp=document.getElementById(id); if(cp) cp.outerHTML=html; }
+
+  detail.addEventListener('input',onEdit);
+  detail.addEventListener('change',onEdit);
+  detail.addEventListener('click',function(e){
+    const item=currentItem(); if(!item) return;
+    if(e.target.closest('[data-recalc]')){ item.T_CRT=+(nz(item.CRT)*nz(item.LUK)*0.01).toFixed(4); renderDetail(); renderList(); save(); return; }
+    if(e.target.closest('[data-add-drop]')){ item.drops.push({itemId:'',chance:1,min:1,max:1}); save(); renderList(); renderDetail(); return; }
+    const dd=e.target.closest('[data-del-drop]');
+    if(dd){ const i=Number(dd.dataset.delDrop); if(i>=0&&i<item.drops.length) item.drops.splice(i,1); save(); renderList(); renderDetail(); return; }
+    if(e.target.closest('[data-add-group]')){
+      item.dropGroups.push({name:'',chance:0.05,mode:'all',items:[{itemId:'',min:1,max:1,weight:1}]});
+      save(); renderList(); renderDetail(); return;
+    }
+    const dg=e.target.closest('[data-del-group]');
+    if(dg){ item.dropGroups.splice(Number(dg.dataset.delGroup),1); save(); renderList(); renderDetail(); return; }
+    const ai=e.target.closest('[data-add-gitem]');
+    if(ai){ const g=item.dropGroups[Number(ai.dataset.addGitem)]; if(g){ g.items.push({itemId:'',min:1,max:1,weight:1}); save(); renderDetail(); } return; }
+    const di=e.target.closest('[data-del-gitem]');
+    if(di){ const g=item.dropGroups[Number(di.dataset.gidx)]; if(g){ g.items.splice(Number(di.dataset.iidx),1); save(); renderDetail(); } return; }
+    /* 技能增删 */
+    if(e.target.closest('[data-m-skill-add]')){ item.skills.push(''); save(); renderDetail(); return; }
+    const sd=e.target.closest('[data-m-skill-del]');
+    if(sd){ item.skills.splice(Number(sd.dataset.mSkillDel),1); save(); renderList(); renderDetail(); return; }
+  });
+
+  function nextKey(){
+    let max=0;
+    data.forEach(function(d){ const m=String(d.key).match(/^m(\d+)$/); if(m) max=Math.max(max,parseInt(m[1],10)); });
+    return 'm'+(max+1);
+  }
+  document.getElementById('mAddBtn').onclick=function(){
+    const key=nextKey();
+    data.push(normalizeEntry(key,{_id:key,_name:'新怪物',_debugSample:false,lv:1,expBase:100,HP:10,MP:0,STR:10,DEF:10,MGA:0,MGD:0,
+      SPD:80,CRT:1.0001,T_CRT:1.0001,LUK:10,GP:1,Cont:0,damageType:'physical',attackType:'normal',skills:[],drops:[]}));
+    selectedKey=key; renderList(); renderDetail(); save();
+  };
+  document.getElementById('mDupBtn').onclick=function(){
+    const src=currentItem(); if(!src) return;
+    const copy=JSON.parse(JSON.stringify(src));
+    copy.key=nextKey(); copy._id=copy.key; copy._name=(copy._name||'')+'_副本'; copy._debugSample=false;
+    data.push(copy); selectedKey=copy.key; renderList(); renderDetail(); save();
+  };
+  document.getElementById('mDelBtn').onclick=function(){
+    if(!selectedKey) return;
+    if(!confirm('确认删除 '+selectedKey+' ?')) return;
+    const idx=data.findIndex(function(d){ return d.key===selectedKey; }); if(idx<0) return;
+    data.splice(idx,1);
+    selectedKey=data.length?data[Math.min(idx,data.length-1)].key:null;
+    renderList(); renderDetail(); save();
+  };
+
+  const importFile=document.getElementById('mImportFile');
+  document.getElementById('mImportBtn').onclick=function(){ importFile.click(); };
+  pickFile(importFile,function(obj){
+    if(Array.isArray(obj)) data=obj.map(function(x,i){ return normalizeEntry(x.key!=null?x.key:('m'+(i+1)),x); });
+    else if(obj&&typeof obj==='object') data=Object.keys(obj).map(function(k){ return normalizeEntry(k,obj[k]); });
+    else throw new Error('根节点必须是对象或数组');
+    selectedKey=data.length?data[0].key:null;
+    renderList(); renderDetail(); save();
+    alert('已导入 '+data.length+' 条怪物。');
+  });
+  document.getElementById('mLoadItemsBtn').onclick=function(){ document.getElementById('mItemsFile').click(); };
+  pickFile(document.getElementById('mItemsFile'),applyItemsTable);
+  clearItemsBtn.onclick=clearItemsTable;
+  document.getElementById('mRevalidateBtn').onclick=function(){ renderList(); renderDetail(); };
+
+  function buildEntry(d){
+    const out={};
+    ENTRY_ORDER.forEach(function(k){
+      if(k==='_debugSample'){ if(d._debugSample) out[k]=true; return; }
+      if(k==='skills'){ const s=(d.skills||[]).filter(Boolean); if(s.length) out[k]=s.slice(); return; }
+      if(k==='drops'){
+        const drops=Array.isArray(d.drops)?d.drops:[]; if(!drops.length) return;
+        out[k]=drops.map(function(x){ return {itemId:x.itemId,chance:Number(nz(x.chance).toFixed(6)),min:x.min,max:x.max}; });
+        return;
+      }
+      if(k==='dropGroups'){
+        const gs=Array.isArray(d.dropGroups)?d.dropGroups:[]; if(!gs.length) return;
+        out[k]=gs.map(function(g){ return {name:g.name||'',chance:Number(nz(g.chance).toFixed(6)),mode:g.mode==='one'?'one':'all',
+          items:(g.items||[]).map(function(x){ return {itemId:x.itemId,min:x.min,max:x.max,weight:Number(x.weight)}; })}; });
+        return;
+      }
+      if(d[k]!==undefined&&d[k]!==null) out[k]=d[k];
+    });
+    Object.keys(d).forEach(function(k){
+      if(!(k in out)&&k!=='key'&&k!=='drops'&&k!=='dropGroups'&&k!=='skills') out[k]=d[k];
+    });
+    return out;
+  }
+  function buildJSONText(){
+    return '{\n'+data.map(function(d){
+      return '  '+JSON.stringify(d.key)+': '+indentBlock(JSON.stringify(buildEntry(d),null,2),1);
+    }).join(',\n')+'\n}';
+  }
+  document.getElementById('mExportBtn').onclick=function(){ download('monsters.json',buildJSONText()); };
+
+  /* 筛选事件 */
+  searchInput.addEventListener('input',renderList);
+  fLvMin.addEventListener('input',renderList);
+  fLvMax.addEventListener('input',renderList);
+  fDamageType.addEventListener('change',renderList);
+  fAttackType.addEventListener('change',renderList);
+  document.querySelectorAll('[data-mtri]').forEach(function(btn){
+    const st={key:btn.dataset.mtri,state:'all',btn:btn}; triStates.push(st);
+    btn.addEventListener('click',function(){
+      st.state=st.state==='all'?'on':(st.state==='on'?'off':'all');
+      btn.dataset.state=st.state;
+      btn.querySelector('.tri-val').textContent=st.state==='all'?'全部':(st.state==='on'?'是':'否');
+      renderList();
+    });
+  });
+  document.getElementById('mResetFilter').onclick=function(){
+    searchInput.value=''; fLvMin.value=''; fLvMax.value=''; fDamageType.value=''; fAttackType.value='';
+    triStates.forEach(function(t){ t.state='all'; t.btn.dataset.state='all'; t.btn.querySelector('.tri-val').textContent='全部'; });
+    renderList();
+  };
+
+  (function init(){
+    fillFilters();
+    const parsed=loadLS(LS_KEY);
+    data=Array.isArray(parsed)&&parsed.length?parsed.map(function(d){ return normalizeEntry(d.key,d); }):defaultData();
+    selectedKey=data.length?data[0].key:null;
+    renderList(); renderDetail();
+  })();
+
+  return {
+    renderList:renderList, renderDetail:renderDetail,
+    onShow:function(){ renderList(); renderDetail(); },
+    exportJSON:function(){ download('monsters.json',buildJSONText()); },
+    count:function(){ return data.length; }
+  };
+})();
+
+/* =========================================================
+   SECTION: 玩家模块
+   ========================================================= */
+MODULES.players=(function(){
+  const LS_KEY='players_editor_skeleton_v2';
+  const NUM_FIELDS=[
+    {k:'lv',label:'lv 等级',step:1,min:1,hint:'≥ 1'},
+    {k:'HP',label:'HP 生命值',step:1,min:1,hint:'≥ 1'},
+    {k:'MP',label:'MP 魔力值',step:1,min:0,hint:'≥ 0'},
+    {k:'STR',label:'STR 物理攻击',step:1,min:0,hint:'≥ 0'},
+    {k:'DEF',label:'DEF 物理防御',step:1,min:0,hint:'≥ 0'},
+    {k:'MGA',label:'MGA 魔法攻击',step:1,min:0,hint:'≥ 0'},
+    {k:'MGD',label:'MGD 魔法防御',step:1,min:0,hint:'≥ 0'},
+    {k:'SPD',label:'SPD 速度',step:1,min:1,hint:'秒/次 = 100 / SPD'},
+    {k:'CRT',label:'CRT 暴击基数',step:0.0001,min:0,hint:'派生用'},
+    {k:'T_CRT',label:'T_CRT 真暴击率',step:0.0001,min:0,hint:'= CRT × LUK × 0.01'},
+    {k:'LUK',label:'LUK 幸运',step:1,min:0,hint:'≥ 0'},
+    {k:'GP',label:'GP 成长力',step:0.1,min:0,hint:'不参与战斗结算'},
+    {k:'Cont',label:'Cont 控制抗性',step:0.1,min:0,hint:'0.5 = 0.5%'}
+  ];
+  const EQUIP_SLOTS=['head','ear','chest','hands','legs','feet','weapon1','weapon2','bag'];
+  const ENTRY_ORDER=['_id','_name','_debugSample','lv','HP','MP','STR','DEF','MGA','MGD','SPD','CRT','T_CRT','LUK','GP','Cont',
+    'skills','startGoldCopper','startEquipment','startItems','storage'];
+
+  let data=[],selectedKey=null,itemsIndex=null;
+  const listBody=document.getElementById('pListBody'), detail=document.getElementById('pDetail'),
+    statEl=document.getElementById('pStat'), searchInput=document.getElementById('pSearch'),
+    fLvMin=document.getElementById('pLvMin'), fLvMax=document.getElementById('pLvMax'),
+    itemsStatus=document.getElementById('pItemsStatus'), clearItemsBtn=document.getElementById('pClearItemsBtn'),
+    itemList=document.getElementById('pItemList');
+  const triStates=[];
+
+  function normSkillList(v){
+    if(!Array.isArray(v)) return [];
+    return v.map(function(x){
+      if(x==null) return '';
+      if(typeof x==='object') return String(x.skillId!=null?x.skillId:(x.key!=null?x.key:(x.id!=null?x.id:''))).trim();
+      return String(x).trim();
+    }).filter(Boolean);
+  }
+  function normalizeEntry(key,obj){
+    obj=obj||{};
+    const rawEq=(obj.startEquipment&&typeof obj.startEquipment==='object'&&!Array.isArray(obj.startEquipment))?obj.startEquipment:{};
+    const startEquipment={};
+    EQUIP_SLOTS.forEach(function(slot){
+      const v=rawEq[slot]!=null?String(rawEq[slot]).trim():''; if(v) startEquipment[slot]=v;
+    });
+    for(const slot in rawEq){
+      if(EQUIP_SLOTS.indexOf(slot)!==-1) continue;
+      const v=rawEq[slot]!=null?String(rawEq[slot]).trim():''; if(v) startEquipment[slot]=v;
+    }
+    const startItems=[];
+    (Array.isArray(obj.startItems)?obj.startItems:[]).forEach(function(it){
+      if(!it||typeof it!=='object') return;
+      const itemId=it.itemId!=null?String(it.itemId).trim():''; if(!itemId) return;
+      startItems.push({itemId:itemId,qty:Math.max(1,Math.floor(num(it.qty,1)))});
+    });
+    const rawSt=(obj.storage&&typeof obj.storage==='object'&&!Array.isArray(obj.storage))?obj.storage:{};
+    const storage={};
+    const ir=Number(rawSt.initRows);
+    if(isFinite(ir)&&ir>=1) storage.initRows=Math.floor(ir);
+
+    const out={
+      key:String(key),
+      _id:obj._id!=null?String(obj._id):String(key),
+      _name:obj._name!=null?String(obj._name):'',
+      _debugSample:!!obj._debugSample,
+      lv:Math.max(1,Math.floor(num(obj.lv,1))),
+      HP:Math.max(1,Math.floor(num(obj.HP,100))),
+      MP:Math.max(0,Math.floor(num(obj.MP,100))),
+      STR:Math.max(0,Math.floor(num(obj.STR,100))),
+      DEF:Math.max(0,Math.floor(num(obj.DEF,100))),
+      MGA:Math.max(0,Math.floor(num(obj.MGA,100))),
+      MGD:Math.max(0,Math.floor(num(obj.MGD,100))),
+      SPD:Math.max(1,Math.floor(num(obj.SPD,100))),
+      CRT:Math.max(0,num(obj.CRT,1.001)),
+      T_CRT:Math.max(0,num(obj.T_CRT,1.001)),
+      LUK:Math.max(0,Math.floor(num(obj.LUK,100))),
+      GP:Math.max(0,num(obj.GP,1)),
+      Cont:Math.max(0,num(obj.Cont,0.5)),
+      skills:normSkillList(obj.skills),
+      startGoldCopper:Math.max(0,Math.floor(num(obj.startGoldCopper,0))),
+      startEquipment:startEquipment,
+      startItems:startItems,
+      storage:storage
+    };
+    Object.keys(obj).forEach(function(k){ if(!(k in out)) out[k]=obj[k]; });
+    return out;
+  }
+  function defaultData(){
+    return [normalizeEntry('p1',{
+      _id:'p1',_name:'战士',_debugSample:true,
+      lv:1,HP:100,MP:100,STR:100,DEF:100,MGA:100,MGD:100,SPD:100,CRT:1.001,T_CRT:1.001,LUK:100,GP:1,Cont:0.5,
+      skills:['s1','s2'],startGoldCopper:10000,
+      startEquipment:{bag:'300100',weapon1:'300001',head:'300101'},
+      startItems:[{itemId:'100001',qty:5},{itemId:'100010',qty:3}],
+      storage:{initRows:28}})];
+  }
+  function save(){ saveLS(LS_KEY,data); REG.counts.players=data.length; updateGlobalStat(); }
+  function currentItem(){ return data.find(function(d){ return d.key===selectedKey; })||null; }
+
+  function hasItemsData(){ return itemsIndex!==null; }
+  function itemsExists(id){ return !hasItemsData()||!!itemsIndex[id]; }
+  function itemName(id){
+    if(!hasItemsData()) return '';
+    const it=itemsIndex[id]; if(!it) return '';
+    return (it._props&&it._props.Name)||it._name||id;
+  }
+  function renderItemDatalist(){
+    if(!hasItemsData()){ itemList.innerHTML=''; return; }
+    itemList.innerHTML=Object.keys(itemsIndex).map(function(id){
+      return '<option value="'+esc(id)+'">'+esc(itemName(id))+'</option>';
+    }).join('');
+  }
+  function applyItemsTable(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw)){ alert('items.json 根节点必须是对象'); return; }
+    itemsIndex=raw;
+    itemsStatus.textContent='已加载 '+Object.keys(raw).length+' 条 items'; itemsStatus.className='ok';
+    clearItemsBtn.disabled=false; renderItemDatalist(); renderList(); renderDetail();
+  }
+  function clearItemsTable(){
+    itemsIndex=null; itemsStatus.textContent='未加载'; itemsStatus.className='hint';
+    clearItemsBtn.disabled=true; renderItemDatalist(); renderList(); renderDetail();
+  }
+
+  function visibleRows(){
+    const q=searchInput.value.trim().toLowerCase();
+    const lvMin=fLvMin.value===''?-Infinity:Number(fLvMin.value);
+    const lvMax=fLvMax.value===''?Infinity:Number(fLvMax.value);
+    return data.filter(function(d){
+      if(q&&[d.key,d._id,d._name,(d.skills||[]).join(' ')].join(' ').toLowerCase().indexOf(q)===-1) return false;
+      if(d.lv<lvMin||d.lv>lvMax) return false;
+      for(let i=0;i<triStates.length;i++){
+        const t=triStates[i]; if(t.state==='all') continue;
+        const v=t.key==='_hasSkill'?!!(d.skills&&d.skills.length):!!d[t.key];
+        if(t.state==='on'&&!v) return false;
+        if(t.state==='off'&&v) return false;
+      }
+      return true;
+    });
+  }
+  function eqCount(d){ return Object.keys(d.startEquipment||{}).length; }
+  function eqTitle(d){
+    const eq=d.startEquipment||{};
+    const parts=Object.keys(eq).map(function(k){ return k+'='+eq[k]; });
+    return parts.length?parts.join('\n'):'无初始装备';
+  }
+  function renderList(){
+    const rows=visibleRows();
+    listBody.innerHTML=rows.map(function(d){
+      const nEq=eqCount(d), nIt=(d.startItems||[]).length, sk=(d.skills||[]).length;
+      return '<tr data-key="'+esc(d.key)+'" draggable="true" class="'+(d.key===selectedKey?'selected':'')+'">'
+        +'<td class="drag">⠿</td><td class="dim">'+esc(d.key)+'</td><td class="dim">'+esc(d._id)+'</td>'
+        +'<td>'+esc(d._name||'')+'</td><td><span class="lv-pill">'+d.lv+'</span></td>'
+        +'<td class="num">'+d.HP+'</td><td class="num">'+d.STR+'</td><td class="num">'+d.DEF+'</td><td class="num">'+d.SPD+'</td>'
+        +'<td class="num"><span class="gold-pill">'+(d.startGoldCopper||0)+'</span></td>'
+        +'<td class="num">'+(sk?'<span class="sk-pill" title="'+esc((d.skills||[]).join(', '))+'">'+sk+'</span>':'<span class="dim">—</span>')+'</td>'
+        +'<td class="num">'+(nEq?'<span class="eq-pill" title="'+esc(eqTitle(d))+'">'+nEq+'</span>':'<span class="dim">—</span>')+'</td>'
+        +'<td class="num">'+(nIt||'<span class="dim">—</span>')+'</td>'
+        +'<td class="dim">'+(d._debugSample?'✓':'')+'</td></tr>';
+    }).join('');
+    statEl.textContent='共 '+data.length+' 条'+(rows.length!==data.length?' / 显示 '+rows.length:'');
+    REG.counts.players=data.length; updateGlobalStat();
+  }
+
+  let dragKey=null,dropTarget=null;
+  function clearDropMarkers(){ listBody.querySelectorAll('.drop-before,.drop-after').forEach(function(el){ el.classList.remove('drop-before','drop-after'); }); }
+  function moveItem(srcKey,tgtKey,after){
+    const si=data.findIndex(function(d){ return d.key===srcKey; }); if(si<0) return;
+    const it=data.splice(si,1)[0];
+    let ti=data.findIndex(function(d){ return d.key===tgtKey; });
+    if(ti<0){ data.splice(si,0,it); return; }
+    if(after) ti+=1;
+    data.splice(ti,0,it); save(); renderList();
+  }
+  listBody.addEventListener('dragstart',function(e){ const tr=e.target.closest('tr'); if(!tr||!tr.dataset.key) return; dragKey=tr.dataset.key; tr.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragKey);}catch(_){}});
+  listBody.addEventListener('dragover',function(e){ if(!dragKey) return; e.preventDefault(); e.dataTransfer.dropEffect='move';
+    const sc=listBody.closest('.left');
+    if(sc){ const r0=sc.getBoundingClientRect(); if(e.clientY<r0.top+48) sc.scrollTop-=14; else if(e.clientY>r0.bottom-48) sc.scrollTop+=14; }
+    const tr=e.target.closest('tr'); clearDropMarkers();
+    if(!tr||!tr.dataset.key||tr.dataset.key===dragKey){ dropTarget=null; return; }
+    const r=tr.getBoundingClientRect(); const after=(e.clientY-r.top)>r.height/2;
+    tr.classList.add(after?'drop-after':'drop-before'); dropTarget={key:tr.dataset.key,after}; });
+  listBody.addEventListener('drop',function(e){ if(!dragKey||!dropTarget) return; e.preventDefault(); const s=dragKey,t=dropTarget; dragKey=null;dropTarget=null;clearDropMarkers(); moveItem(s,t.key,t.after); });
+  listBody.addEventListener('dragend',function(){ dragKey=null;dropTarget=null;clearDropMarkers(); listBody.querySelectorAll('tr.dragging').forEach(function(el){ el.classList.remove('dragging'); }); });
+  listBody.addEventListener('click',function(e){ const tr=e.target.closest('tr'); if(!tr||!tr.dataset.key) return; if(tr.dataset.key===selectedKey) return; selectedKey=tr.dataset.key; renderList(); renderDetail(); });
+
+  function renderStartEquipment(item){
+    const eq=item.startEquipment||{};
+    const slots=EQUIP_SLOTS.slice();
+    for(const k in eq){ if(slots.indexOf(k)===-1) slots.push(k); }
+    const rows=slots.map(function(slot){
+      const id=eq[slot]||'';
+      const miss=id&&hasItemsData()&&!itemsExists(id);
+      const name=id?(hasItemsData()?(itemsExists(id)?itemName(id):'（缺失）'):''):'';
+      return '<tr><td class="slot-name">'+esc(slot)+'</td>'
+        +'<td><input type="text" data-equip-slot="'+esc(slot)+'" list="pItemList" value="'+esc(id)+'" placeholder="— 空 —"></td>'
+        +'<td class="item-name '+(miss?'miss':'')+'">'+esc(name)+(miss?' ⚠':'')+'</td>'
+        +'<td>'+(id?'<button type="button" class="del" data-equip-clear="'+esc(slot)+'">×</button>':'')+'</td></tr>';
+    }).join('');
+    return '<table class="pool-table"><thead><tr><th style="width:90px">槽位</th><th>itemId</th><th>名称</th><th style="width:36px"></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  function renderStartItems(item){
+    const list=item.startItems||[];
+    if(!list.length) return '<div class="empty">暂无初始物品。点击「＋ 添加物品」开始。</div>';
+    const rows=list.map(function(it,i){
+      const miss=hasItemsData()&&!itemsExists(it.itemId);
+      const name=hasItemsData()?(itemsExists(it.itemId)?itemName(it.itemId):'（缺失）'):'';
+      return '<tr><td><input type="text" data-item-field="itemId" data-item-idx="'+i+'" list="pItemList" value="'+esc(it.itemId)+'"></td>'
+        +'<td class="item-name '+(miss?'miss':'')+'">'+esc(name)+(miss?' ⚠':'')+'</td>'
+        +'<td style="width:70px"><input type="number" data-item-field="qty" data-item-idx="'+i+'" value="'+it.qty+'" min="1" step="1"></td>'
+        +'<td style="width:36px"><button type="button" class="del" data-item-del="'+i+'">×</button></td></tr>';
+    }).join('');
+    return '<table class="pool-table"><thead><tr><th>itemId</th><th>名称</th><th>数量</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  function renderCheckPanel(item){
+    let h='<div class="check-panel" id="pCheck">';
+    const lines=[];
+    const sk=item.skills||[];
+    if(sk.length){
+      const unknown=REG.skills.length?sk.filter(function(id){ return !REG.hasSkill(id); }):[];
+      lines.push('<div class="row">初始技能 <b>'+sk.length+'</b> 个：'+esc(sk.map(function(id){ return id+(REG.skillName(id)?'（'+REG.skillName(id)+'）':''); }).join('、'))+'</div>');
+      if(unknown.length) lines.push('<div class="row err">⚠ 技能表中找不到：'+esc(unknown.join(', '))+'</div>');
+    } else lines.push('<div class="row">未配置初始技能。</div>');
+
+    if(!hasItemsData()){
+      lines.push('<div class="row">未加载 items.json，跳过 itemId 校验。</div>');
+    } else {
+      const eq=item.startEquipment||{}, items=item.startItems||[];
+      const missEq=Object.keys(eq).filter(function(s){ return !itemsExists(eq[s]); }).map(function(s){ return s+':'+eq[s]; });
+      const missIt=items.filter(function(it){ return !itemsExists(it.itemId); }).map(function(it){ return it.itemId; });
+      lines.push('<div class="row">初始装备 <b>'+Object.keys(eq).length+'</b> 件，初始物品 <b>'+items.length+'</b> 条。</div>');
+      if(missEq.length) lines.push('<div class="row err">装备缺失 itemId：'+esc(missEq.join(', '))+'</div>');
+      if(missIt.length) lines.push('<div class="row err">物品缺失 itemId：'+esc(Array.from(new Set(missIt)).join(', '))+'</div>');
+      if(!missEq.length&&!missIt.length) lines.push('<div class="row ok">✓ 初始装备与物品全部引用有效。</div>');
+    }
+    return h+lines.join('')+'</div>';
+  }
+  function refreshDerived(item){
+    const hint=detail.querySelector('.derived');
+    if(hint) hint.innerHTML='T_CRT 校验：<b>CRT × LUK × 0.01</b> = '+item.CRT+' × '+item.LUK+' × 0.01 = <b>'+(nz(item.CRT)*nz(item.LUK)*0.01).toFixed(4)+'</b>'
+      +' &nbsp;·&nbsp; 暴击率 = clamp(T_CRT × 0.05, 0.02, 0.75) = <b>'+(critChance(item.T_CRT)*100).toFixed(2)+'%</b>';
+  }
+
+  function renderDetail(){
+    const item=currentItem();
+    if(!item){ detail.innerHTML='<p class="hint">← 从左侧选择一条玩家进行编辑</p>'; return; }
+    let h='';
+    h+='<div class="section-title">基本信息</div>';
+    h+=fieldText('Key（对象键）','data-root="key"',item.key);
+    h+='<div class="grid2">'+fieldText('_id（标识）','data-root="_id"',item._id)+fieldText('_name（名称）','data-root="_name"',item._name)+'</div>';
+    h+=boolHTML('data-root="_debugSample"','_debugSample（调试样例）',item._debugSample);
+
+    h+='<div class="section-title">等级</div><div class="grid4">'+numFieldHTML(NUM_FIELDS[0],item.lv)+'</div>';
+
+    h+='<div class="section-title">战斗属性（12 字段）</div><div class="grid4">';
+    for(let i=1;i<NUM_FIELDS.length;i++) h+=numFieldHTML(NUM_FIELDS[i],item[NUM_FIELDS[i].k]);
+    h+='</div>';
+    h+='<div class="derived">T_CRT 校验：<b>CRT × LUK × 0.01</b> = '+item.CRT+' × '+item.LUK+' × 0.01 = <b>'+(nz(item.CRT)*nz(item.LUK)*0.01).toFixed(4)+'</b>'
+      +' &nbsp;·&nbsp; 暴击率 = clamp(T_CRT × 0.05, 0.02, 0.75) = <b>'+(critChance(item.T_CRT)*100).toFixed(2)+'%</b></div>';
+    h+='<button type="button" class="mini" data-recalc="1" style="margin-top:6px">按公式重算 T_CRT</button>';
+
+    /* 新增：玩家技能选择 */
+    h+='<div class="section-title">初始技能 skills <span class="r">开局即掌握的技能</span></div>';
+    h+=skillPickerHTML('p',item);
+
+    h+='<div class="section-title">初始状态</div><div class="grid2">'
+      +fieldNum('startGoldCopper 初始铜币','data-num="startGoldCopper"',item.startGoldCopper||0,'1','0','可选，缺省 0')
+      +'<div class="field"><div class="field-head"><label>storage.initRows 仓库初始行数</label><span class="tagline">留空 = containers.json</span></div>'
+      +'<input type="number" step="1" min="1" data-storage="initRows" value="'+(item.storage&&item.storage.initRows?item.storage.initRows:'')+'" placeholder="留空则使用全局配置"></div>'
+      +'</div>';
+
+    h+='<div class="section-title">基础装备 startEquipment <span class="r">槽位 → itemId，空槽省略</span></div>';
+    h+=renderStartEquipment(item);
+
+    h+='<div class="section-title">初始物品 startItems <span class="r">放入背包，溢出到仓库</span></div>';
+    h+=renderStartItems(item);
+    h+='<div class="pool-actions"><button type="button" class="mini" data-add-start-item="1">＋ 添加物品</button></div>';
+    h+=renderCheckPanel(item);
+
+    detail.innerHTML=h;
+  }
+
+  function onEdit(e){
+    const el=e.target, item=currentItem(); if(!item) return;
+
+    /* 技能选择 */
+    if(el.dataset.pSkillIdx!==undefined){
+      const i=Number(el.dataset.pSkillIdx);
+      item.skills[i]=String(el.value).trim();
+      if(e.type==='change'){ item.skills=item.skills.filter(Boolean); save(); renderList(); renderDetail(); }
+      else save();
+      return;
+    }
+
+    if(el.dataset.equipSlot){
+      const slot=el.dataset.equipSlot, v=String(el.value).trim();
+      if(v) item.startEquipment[slot]=v; else delete item.startEquipment[slot];
+      if(e.type==='change') renderDetail();
+      save(); return;
+    }
+    if(el.dataset.itemField){
+      const i=Number(el.dataset.itemIdx), f=el.dataset.itemField, it=item.startItems[i]; if(!it) return;
+      if(f==='itemId'){ it.itemId=String(el.value).trim(); if(e.type==='change') renderDetail(); }
+      else if(f==='qty'){ let v=Math.floor(Number(el.value)); if(!isFinite(v)||v<1) v=1; it.qty=v; }
+      save(); renderList(); return;
+    }
+    if(el.dataset.storage){
+      const k=el.dataset.storage, raw=String(el.value).trim();
+      if(raw==='') delete item.storage[k];
+      else { let v=Math.floor(Number(raw)); if(!isFinite(v)||v<1) v=1; item.storage[k]=v; }
+      save(); return;
+    }
+    if(el.dataset.root){
+      const k=el.dataset.root;
+      if(k==='key'){
+        if(e.type!=='change') return;
+        const nv=String(el.value).trim();
+        if(!nv){ el.value=item.key; return; }
+        if(nv===item.key) return;
+        if(data.some(function(d){ return d!==item&&d.key===nv; })){ alert('Key 已存在：'+nv); el.value=item.key; return; }
+        item.key=nv; if(!item._id||item._id===selectedKey) item._id=nv;
+        selectedKey=nv; renderList(); renderDetail(); save(); return;
+      }
+      if(k==='_debugSample'){ item._debugSample=el.checked; renderDetail(); renderList(); save(); return; }
+      item[k]=el.value; renderList(); save(); return;
+    }
+    if(el.dataset.num){
+      const k=el.dataset.num;
+      let v=el.value===''?0:Number(el.value); if(!isFinite(v)) v=0;
+      if(k==='lv'||k==='HP'||k==='SPD') v=Math.max(1,Math.floor(v));
+      if(k==='startGoldCopper') v=Math.max(0,Math.floor(v));
+      item[k]=v;
+      if(k==='CRT'||k==='LUK'||k==='T_CRT') refreshDerived(item);
+      renderList(); save(); return;
+    }
+  }
+  detail.addEventListener('input',onEdit);
+  detail.addEventListener('change',onEdit);
+  detail.addEventListener('click',function(e){
+    const item=currentItem(); if(!item) return;
+    if(e.target.closest('[data-recalc]')){ item.T_CRT=+(nz(item.CRT)*nz(item.LUK)*0.01).toFixed(4); renderDetail(); renderList(); save(); return; }
+    if(e.target.closest('[data-add-start-item]')){ item.startItems.push({itemId:'',qty:1}); save(); renderList(); renderDetail(); return; }
+    const di=e.target.closest('[data-item-del]');
+    if(di){ const i=Number(di.dataset.itemDel); if(i>=0&&i<item.startItems.length) item.startItems.splice(i,1); save(); renderList(); renderDetail(); return; }
+    const ec=e.target.closest('[data-equip-clear]');
+    if(ec){ delete item.startEquipment[ec.dataset.equipClear]; save(); renderList(); renderDetail(); return; }
+    if(e.target.closest('[data-p-skill-add]')){ item.skills.push(''); save(); renderDetail(); return; }
+    const sd=e.target.closest('[data-p-skill-del]');
+    if(sd){ item.skills.splice(Number(sd.dataset.pSkillDel),1); save(); renderList(); renderDetail(); return; }
+  });
+
+  function nextKey(){
+    let max=0;
+    data.forEach(function(d){ const m=String(d.key).match(/^p(\d+)$/); if(m) max=Math.max(max,parseInt(m[1],10)); });
+    return 'p'+(max+1);
+  }
+  document.getElementById('pAddBtn').onclick=function(){
+    const key=nextKey();
+    data.push(normalizeEntry(key,{_id:key,_name:'新玩家',_debugSample:false,lv:1,HP:100,MP:100,STR:100,DEF:100,MGA:100,MGD:100,
+      SPD:100,CRT:1.001,T_CRT:1.001,LUK:100,GP:1,Cont:0.5,skills:[],startGoldCopper:0,startEquipment:{},startItems:[],storage:{}}));
+    selectedKey=key; renderList(); renderDetail(); save();
+  };
+  document.getElementById('pDupBtn').onclick=function(){
+    const src=currentItem(); if(!src) return;
+    const copy=JSON.parse(JSON.stringify(src));
+    copy.key=nextKey(); copy._id=copy.key; copy._name=(copy._name||'')+'_副本'; copy._debugSample=false;
+    data.push(copy); selectedKey=copy.key; renderList(); renderDetail(); save();
+  };
+  document.getElementById('pDelBtn').onclick=function(){
+    if(!selectedKey) return;
+    if(!confirm('确认删除 '+selectedKey+' ?')) return;
+    const idx=data.findIndex(function(d){ return d.key===selectedKey; }); if(idx<0) return;
+    data.splice(idx,1);
+    selectedKey=data.length?data[Math.min(idx,data.length-1)].key:null;
+    renderList(); renderDetail(); save();
+  };
+
+  const importFile=document.getElementById('pImportFile');
+  document.getElementById('pImportBtn').onclick=function(){ importFile.click(); };
+  pickFile(importFile,function(obj){
+    if(Array.isArray(obj)) data=obj.map(function(x,i){ return normalizeEntry(x.key!=null?x.key:('p'+(i+1)),x); });
+    else if(obj&&typeof obj==='object') data=Object.keys(obj).map(function(k){ return normalizeEntry(k,obj[k]); });
+    else throw new Error('根节点必须是对象或数组');
+    selectedKey=data.length?data[0].key:null;
+    renderList(); renderDetail(); save();
+    alert('已导入 '+data.length+' 条玩家。');
+  });
+  document.getElementById('pLoadItemsBtn').onclick=function(){ document.getElementById('pItemsFile').click(); };
+  pickFile(document.getElementById('pItemsFile'),applyItemsTable);
+  clearItemsBtn.onclick=clearItemsTable;
+  document.getElementById('pRevalidateBtn').onclick=function(){ renderList(); renderDetail(); };
+
+  function buildEntry(d){
+    const out={};
+    ENTRY_ORDER.forEach(function(k){
+      if(k==='_debugSample'){ if(d._debugSample) out[k]=true; return; }
+      if(k==='skills'){ const s=(d.skills||[]).filter(Boolean); if(s.length) out[k]=s.slice(); return; }
+      if(k==='startGoldCopper'){ if(d.startGoldCopper>0) out[k]=d.startGoldCopper; return; }
+      if(k==='startEquipment'){ const eq=d.startEquipment||{}; if(Object.keys(eq).length) out[k]=eq; return; }
+      if(k==='startItems'){
+        const list=Array.isArray(d.startItems)?d.startItems:[];
+        if(list.length) out[k]=list.map(function(x){ return {itemId:x.itemId,qty:x.qty}; });
+        return;
+      }
+      if(k==='storage'){
+        const st=d.storage||{};
+        if(Number.isFinite(st.initRows)&&st.initRows>=1) out[k]={initRows:st.initRows};
+        return;
+      }
+      if(d[k]!==undefined&&d[k]!==null) out[k]=d[k];
+    });
+    Object.keys(d).forEach(function(k){
+      if(!(k in out)&&k!=='key'&&k!=='startEquipment'&&k!=='startItems'&&k!=='storage'&&k!=='skills') out[k]=d[k];
+    });
+    return out;
+  }
+  function buildJSONText(){
+    return '{\n'+data.map(function(d){
+      return '  '+JSON.stringify(d.key)+': '+indentBlock(JSON.stringify(buildEntry(d),null,2),1);
+    }).join(',\n')+'\n}';
+  }
+  document.getElementById('pExportBtn').onclick=function(){ download('players.json',buildJSONText()); };
+
+  searchInput.addEventListener('input',renderList);
+  fLvMin.addEventListener('input',renderList);
+  fLvMax.addEventListener('input',renderList);
+  document.querySelectorAll('[data-ptri]').forEach(function(btn){
+    const st={key:btn.dataset.ptri,state:'all',btn:btn}; triStates.push(st);
+    btn.addEventListener('click',function(){
+      st.state=st.state==='all'?'on':(st.state==='on'?'off':'all');
+      btn.dataset.state=st.state;
+      btn.querySelector('.tri-val').textContent=st.state==='all'?'全部':(st.state==='on'?'是':'否');
+      renderList();
+    });
+  });
+  document.getElementById('pResetFilter').onclick=function(){
+    searchInput.value=''; fLvMin.value=''; fLvMax.value='';
+    triStates.forEach(function(t){ t.state='all'; t.btn.dataset.state='all'; t.btn.querySelector('.tri-val').textContent='全部'; });
+    renderList();
+  };
+
+  (function init(){
+    const parsed=loadLS(LS_KEY);
+    data=Array.isArray(parsed)&&parsed.length?parsed.map(function(d){ return normalizeEntry(d.key,d); }):defaultData();
+    selectedKey=data.length?data[0].key:null;
+    renderList(); renderDetail();
+  })();
+
+  return {
+    renderList:renderList, renderDetail:renderDetail,
+    onShow:function(){ renderList(); renderDetail(); },
+    exportJSON:function(){ download('players.json',buildJSONText()); },
+    count:function(){ return data.length; }
+  };
+})();
+
+/* =========================================================
+   SECTION: 全局导出与启动
+   ========================================================= */
+document.getElementById('exportAllBtn').onclick=function(){
+  MODULES.skills.exportJSON();
+  setTimeout(function(){ MODULES.monsters.exportJSON(); },500);
+  setTimeout(function(){ MODULES.players.exportJSON(); },1000);
+};
+
+(function boot(){
+  renderSkillDatalist();
+  updateGlobalStat();
+  const tab=(prefs.tab&&MODULES[prefs.tab])?prefs.tab:'skills';
+  switchTab(tab);
+})();
+
+})();
+</script>
+</body>
+</html>

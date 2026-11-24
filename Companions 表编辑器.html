@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Companions 表编辑器 · 骨架版</title>
+<style>
+  :root{
+    --bg:#121212; --panel:#1A1A1A; --panel2:#202020; --line:#333;
+    --text:#C8C8C8; --text-dim:#8A8A8A; --text-strong:#E8E8E8;
+    --accent:#4A9EFF; --danger:#FF5A5A; --gain:#5FE0A0; --gold:#F0C040;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:Consolas,"Courier New",monospace;font-size:14px;
+    height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{
+    display:flex;gap:8px;align-items:center;padding:10px 14px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;
+  }
+  header h1{font-size:15px;margin:0 12px 0 0;color:var(--text-strong);font-weight:normal}
+  button{
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:5px 12px;cursor:pointer;font-family:inherit;font-size:13px;
+  }
+  button:hover{border-color:var(--accent);color:var(--text-strong)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  input,select{
+    background:#0E0E0E;color:var(--text-strong);border:1px solid var(--line);
+    padding:5px 8px;font-family:inherit;font-size:13px;width:100%;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  #searchInput{width:190px}
+  .stat{color:var(--text-dim);font-size:12px;margin-left:auto}
+
+  .toolbar{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding:8px 14px;background:#161616;border-bottom:1px solid var(--line);
+    font-size:12px;
+  }
+  .toolbar label{display:flex;align-items:center;gap:5px;color:var(--text-dim)}
+  .toolbar .fsep{width:1px;height:18px;background:var(--line)}
+  .toolbar .hint{color:var(--text-dim);font-size:11px}
+  .toolbar .ok{color:var(--gain)}
+  .toolbar .miss{color:var(--danger)}
+  .mini{
+    font-size:11px;padding:3px 9px;background:#0E0E0E;
+    border:1px solid var(--line);color:var(--accent);cursor:pointer;font-family:inherit;
+  }
+  .mini:hover{border-color:var(--accent)}
+  .mini:disabled{opacity:.4;cursor:not-allowed}
+
+  main{flex:1;display:flex;min-height:0}
+  .left{flex:1;min-width:0;overflow:auto;border-right:1px solid var(--line)}
+  .right{width:580px;flex:none;overflow:auto;padding:14px;background:var(--panel)}
+
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;white-space:nowrap}
+  th{
+    position:sticky;top:0;background:var(--panel2);color:var(--text-dim);
+    font-weight:normal;font-size:12px;z-index:1;
+  }
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#1E1E1E}
+  tbody tr.selected{background:#1A2A3A}
+  tbody tr.dragging{opacity:.35}
+  tbody tr.drop-before td{border-top:2px solid var(--accent)}
+  tbody tr.drop-after td{border-bottom:2px solid var(--accent)}
+  td.drag{cursor:grab;color:#4a4a4a;text-align:center;user-select:none;width:26px}
+  td.drag:active{cursor:grabbing}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .dim{color:var(--text-dim)}
+  .hint{color:var(--text-dim);text-align:center;padding:40px 0}
+  .miss{color:var(--danger)}
+
+  .field{margin-bottom:9px}
+  .field label{display:block;color:var(--text-dim);font-size:12px;margin-bottom:3px}
+  .field-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:3px}
+  .field-head label{margin:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:0 8px}
+  .section-title{
+    color:var(--accent);font-size:13px;margin:18px 0 10px;
+    border-bottom:1px solid var(--line);padding-bottom:4px;
+  }
+  .section-title:first-child{margin-top:0}
+
+  .bool-item{
+    display:flex;align-items:center;gap:8px;padding:4px 0;
+    cursor:pointer;font-size:12px;color:var(--text);
+  }
+  .bool-item input{display:none}
+  .bool-item .track{
+    width:30px;height:16px;border-radius:8px;background:#2a2a2a;
+    border:1px solid var(--line);position:relative;flex:none;margin-left:auto;
+    transition:background .15s,border-color .15s;
+  }
+  .bool-item .track::after{
+    content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;
+    border-radius:50%;background:#666;transition:transform .15s,background .15s;
+  }
+  .bool-item input:checked + .track{background:#16324d;border-color:var(--accent)}
+  .bool-item input:checked + .track::after{transform:translateX(14px);background:var(--accent)}
+
+  .tagline{font-size:11px;color:var(--text-dim);margin-top:3px}
+
+  .derived{
+    background:#0F1A22;border:1px solid #1E3A4A;border-radius:4px;
+    padding:6px 8px;font-size:12px;color:#7FCFFF;margin-top:6px;
+  }
+  .derived b{color:#BFE8FF;font-weight:600}
+
+  .lv-pill{
+    display:inline-block;padding:1px 6px;border-radius:3px;
+    background:#1A2A3A;color:#7FB8FF;font-size:11px;
+  }
+  .slot-pill{
+    display:inline-block;padding:1px 6px;border-radius:3px;
+    background:#2A3A1A;color:#9CE07A;font-size:11px;
+  }
+  .slot-pill.none{background:#1E1E1E;color:#666}
+
+  .dt-physical{color:#E0A050}
+  .dt-magical{color:#B06CFF}
+  .at-normal{color:#A0A0A0}
+  .at-heavy{color:#E05050}
+  .at-skill{color:#50C0E0}
+
+  .check-panel{
+    margin-top:10px;padding:8px 10px;border-radius:4px;
+    background:#0F1A22;border:1px solid #1E3A4A;font-size:12px;color:#7FCFFF;
+  }
+  .check-panel b{color:#BFE8FF}
+  .check-panel .err{color:#E07A7A}
+  .check-panel .ok{color:#5FE0A0}
+  .check-panel .row{margin:2px 0}
+
+  .empty-banner{
+    padding:30px 20px;text-align:center;color:var(--text-dim);font-size:13px;
+  }
+  .empty-banner b{color:var(--text-strong)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Companions 编辑器 · 骨架版</h1>
+  <button id="addBtn">＋ 新增</button>
+  <button id="dupBtn">⧉ 复制</button>
+  <button id="delBtn" class="danger">－ 删除</button>
+  <button id="importBtn">导入 JSON</button>
+  <button id="exportBtn">导出 JSON</button>
+  <input type="text" id="searchInput" placeholder="搜索 Key / ID / 名字">
+  <span class="stat" id="stat"></span>
+</header>
+
+<div class="toolbar">
+  <label>枚举参考
+    <button id="loadDmgBtn" class="mini">加载 damage_types.json</button>
+    <button id="loadAtkBtn" class="mini">加载 attack_types.json</button>
+    <input type="file" id="dmgFile" accept=".json" hidden>
+    <input type="file" id="atkFile" accept=".json" hidden>
+  </label>
+  <span id="refStatus" class="hint">未加载（使用骨架兜底枚举）</span>
+  <span class="fsep"></span>
+  <button id="revalidateBtn" class="mini">重新校验</button>
+  <span class="hint">骨架中 companions.json 为空 {}；本编辑器允许新增。字段与 monsters/players 对齐。</span>
+</div>
+
+<main>
+  <div class="left">
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Key</th><th>_id</th><th>名字</th><th>Lv</th>
+          <th class="num">HP</th><th class="num">STR</th><th class="num">DEF</th><th class="num">SPD</th>
+          <th>出战位</th><th>配置位</th><th>伤害</th><th>调试</th>
+        </tr>
+      </thead>
+      <tbody id="listBody"></tbody>
+    </table>
+  </div>
+  <div class="right" id="detail"></div>
+</main>
+
+<input type="file" id="importInput" accept=".json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   常量（与骨架 companions.json 对齐）
+   ========================================================= */
+const LS_KEY = 'companions_editor_skeleton_v1';
+
+/* 骨架兜底枚举 */
+const DEFAULT_DAMAGE_TYPES = {physical:'物理', magical:'魔法'};
+const DEFAULT_ATTACK_TYPES = {normal:'普通', heavy:'重击', skill:'技能'};
+
+/* 12 字段 + lv */
+const NUM_FIELDS = [
+  {k:'lv',    label:'lv 等级',         step:1,      min:1, hint:'≥ 1'},
+  {k:'HP',    label:'HP 生命值',       step:1,      min:1, hint:'≥ 1'},
+  {k:'MP',    label:'MP 魔力值',       step:1,      min:0, hint:'≥ 0'},
+  {k:'STR',   label:'STR 物理攻击',    step:1,      min:0, hint:'≥ 0'},
+  {k:'DEF',   label:'DEF 物理防御',    step:1,      min:0, hint:'≥ 0'},
+  {k:'MGA',   label:'MGA 魔法攻击',    step:1,      min:0, hint:'≥ 0'},
+  {k:'MGD',   label:'MGD 魔法防御',    step:1,      min:0, hint:'≥ 0'},
+  {k:'SPD',   label:'SPD 速度',        step:1,      min:1, hint:'秒/次 = 100 / SPD'},
+  {k:'CRT',   label:'CRT 暴击基数',    step:0.0001, min:0, hint:'派生用'},
+  {k:'T_CRT', label:'T_CRT 真暴击率',  step:0.0001, min:0, hint:'= CRT × LUK × 0.01'},
+  {k:'LUK',   label:'LUK 幸运',        step:1,      min:0, hint:'≥ 0'},
+  {k:'GP',    label:'GP 成长力',       step:0.1,    min:0, hint:'不参与战斗结算'},
+  {k:'Cont',  label:'Cont 控制抗性',   step:0.1,    min:0, hint:'0.5 = 0.5%'}
+];
+
+const ENTRY_ORDER = [
+  '_id','_name','_debugSample',
+  'lv','HP','MP','STR','DEF','MGA','MGD','SPD','CRT','T_CRT','LUK','GP','Cont',
+  'damageType','attackType',
+  'activeSlot','configSlot','independentCast'
+];
+
+/* =========================================================
+   数据模型
+   ========================================================= */
+function num(v, d){
+  if (v === '' || v === null || v === undefined) return d;
+  const n = Number(v);
+  return isFinite(n) ? n : d;
+}
+
+function normSlot(v){
+  if (v === null || v === undefined || v === '') return null;
+  const n = Math.floor(Number(v));
+  if (!isFinite(n) || n < 1 || n > 4) return null;
+  return n;
+}
+
+function normalizeEntry(key, obj){
+  obj = obj || {};
+  const out = {
+    key: String(key),
+    _id:   obj._id   != null ? String(obj._id)   : String(key),
+    _name: obj._name != null ? String(obj._name) : '',
+    _debugSample: !!obj._debugSample,
+    lv:    Math.max(1, Math.floor(num(obj.lv, 1))),
+    HP:    Math.max(1, Math.floor(num(obj.HP, 100))),
+    MP:    Math.max(0, Math.floor(num(obj.MP, 100))),
+    STR:   Math.max(0, Math.floor(num(obj.STR, 100))),
+    DEF:   Math.max(0, Math.floor(num(obj.DEF, 100))),
+    MGA:   Math.max(0, Math.floor(num(obj.MGA, 100))),
+    MGD:   Math.max(0, Math.floor(num(obj.MGD, 100))),
+    SPD:   Math.max(1, Math.floor(num(obj.SPD, 100))),
+    CRT:   Math.max(0, num(obj.CRT, 1.001)),
+    T_CRT: Math.max(0, num(obj.T_CRT, 1.001)),
+    LUK:   Math.max(0, Math.floor(num(obj.LUK, 100))),
+    GP:    Math.max(0, num(obj.GP, 1)),
+    Cont:  Math.max(0, num(obj.Cont, 0)),
+    damageType: (obj.damageType === 'magical' ? 'magical' : 'physical'),
+    attackType: (['normal','heavy','skill'].includes(obj.attackType) ? obj.attackType : 'normal'),
+    activeSlot: normSlot(obj.activeSlot),
+    configSlot: normSlot(obj.configSlot),
+    independentCast: obj.independentCast === true
+  };
+  Object.keys(obj).forEach(k => { if (!(k in out)) out[k] = obj[k]; });
+  return out;
+}
+
+/* 骨架 companions.json 是 {}，这里默认空数组 */
+function defaultData(){ return []; }
+
+function critChance(T_CRT){
+  return Math.max(0.02, Math.min(0.75, T_CRT * 0.05));
+}
+
+/* =========================================================
+   状态
+   ========================================================= */
+let data = [];
+let selectedKey = null;
+
+let damageTypeRef = null;
+let attackTypeRef = null;
+
+const listBody    = document.getElementById('listBody');
+const detail      = document.getElementById('detail');
+const stat        = document.getElementById('stat');
+const searchInput = document.getElementById('searchInput');
+const dmgFile     = document.getElementById('dmgFile');
+const atkFile     = document.getElementById('atkFile');
+const refStatus   = document.getElementById('refStatus');
+
+/* =========================================================
+   工具
+   ========================================================= */
+function esc(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function save(){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e){}
+}
+function currentItem(){
+  return data.find(d => d.key === selectedKey) || null;
+}
+
+function damageTypes(){ return damageTypeRef || DEFAULT_DAMAGE_TYPES; }
+function attackTypes(){ return attackTypeRef || DEFAULT_ATTACK_TYPES; }
+function damageLabel(k){ return damageTypes()[k] || k; }
+function attackLabel(k){ return attackTypes()[k] || k; }
+function damageValid(k){ return Object.prototype.hasOwnProperty.call(damageTypes(), k); }
+function attackValid(k){ return Object.prototype.hasOwnProperty.call(attackTypes(), k); }
+
+/* =========================================================
+   枚举参考表
+   ========================================================= */
+function applyDamageTypes(raw){
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)){
+    alert('damage_types.json 结构应为 { "physical":"物理", ... }');
+    return;
+  }
+  damageTypeRef = {};
+  Object.keys(raw).forEach(k => { damageTypeRef[k] = String(raw[k]); });
+  updateRefStatus(); renderList(); renderDetail();
+}
+function applyAttackTypes(raw){
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)){
+    alert('attack_types.json 结构应为 { "normal":"普通", ... }');
+    return;
+  }
+  attackTypeRef = {};
+  Object.keys(raw).forEach(k => { attackTypeRef[k] = String(raw[k]); });
+  updateRefStatus(); renderList(); renderDetail();
+}
+function updateRefStatus(){
+  const parts = [];
+  if (damageTypeRef) parts.push(`伤害枚举 <span class="ok">${Object.keys(damageTypeRef).length}</span>`);
+  if (attackTypeRef) parts.push(`攻击枚举 <span class="ok">${Object.keys(attackTypeRef).length}</span>`);
+  if (!parts.length){
+    refStatus.textContent = '未加载（使用骨架兜底枚举）';
+    refStatus.className = 'hint';
+  } else {
+    refStatus.innerHTML = '已加载：' + parts.join(' · ');
+    refStatus.className = 'hint';
+  }
+}
+
+/* =========================================================
+   筛选
+   ========================================================= */
+function visibleRows(){
+  const q = searchInput.value.trim().toLowerCase();
+  return data.filter(d => {
+    if (!q) return true;
+    const hay = [d.key, d._id, d._name].join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  });
+}
+
+/* =========================================================
+   列表
+   ========================================================= */
+function renderList(){
+  const rows = visibleRows();
+  if (!data.length){
+    listBody.innerHTML = `<tr><td colspan="13" class="empty-banner">
+      骨架中 <b>companions.json</b> 为空 <b>{}</b>。点击「＋ 新增」添加随从。
+    </td></tr>`;
+    stat.textContent = '共 0 条';
+    return;
+  }
+  listBody.innerHTML = rows.map(d => {
+    const dtCls = damageValid(d.damageType) ? ('dt-' + d.damageType) : 'miss';
+    const actPill = d.activeSlot
+      ? `<span class="slot-pill">${d.activeSlot}</span>`
+      : `<span class="slot-pill none">—</span>`;
+    const cfgPill = d.configSlot
+      ? `<span class="slot-pill">${d.configSlot}</span>`
+      : `<span class="slot-pill none">—</span>`;
+    return `<tr data-key="${esc(d.key)}" draggable="true" class="${d.key===selectedKey?'selected':''}">
+      <td class="drag">⠿</td>
+      <td class="dim">${esc(d.key)}</td>
+      <td class="dim">${esc(d._id)}</td>
+      <td>${esc(d._name || '')}</td>
+      <td><span class="lv-pill">${d.lv}</span></td>
+      <td class="num">${d.HP}</td>
+      <td class="num">${d.STR}</td>
+      <td class="num">${d.DEF}</td>
+      <td class="num">${d.SPD}</td>
+      <td>${actPill}</td>
+      <td>${cfgPill}</td>
+      <td class="${dtCls}">${esc(damageLabel(d.damageType))}</td>
+      <td class="dim">${d._debugSample ? '✓' : ''}</td>
+    </tr>`;
+  }).join('');
+  stat.textContent = `共 ${data.length} 条` +
+    (rows.length !== data.length ? ` / 显示 ${rows.length}` : '');
+}
+
+/* =========================================================
+   拖拽排序
+   ========================================================= */
+let dragKey = null;
+let dropTarget = null;
+
+function clearDropMarkers(){
+  listBody.querySelectorAll('.drop-before,.drop-after').forEach(el => {
+    el.classList.remove('drop-before','drop-after');
+  });
+}
+function moveItem(srcKey, tgtKey, after){
+  const si = data.findIndex(d => d.key === srcKey);
+  if (si < 0) return;
+  const item = data.splice(si,1)[0];
+  let ti = data.findIndex(d => d.key === tgtKey);
+  if (ti < 0){ data.splice(si,0,item); return; }
+  if (after) ti += 1;
+  data.splice(ti,0,item);
+  save(); renderList();
+}
+
+listBody.addEventListener('dragstart', e => {
+  const tr = e.target.closest('tr');
+  if (!tr || !tr.dataset.key) return;
+  dragKey = tr.dataset.key;
+  tr.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', dragKey); } catch(_){}
+});
+listBody.addEventListener('dragover', e => {
+  if (!dragKey) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr');
+  clearDropMarkers();
+  if (!tr || !tr.dataset.key || tr.dataset.key === dragKey){ dropTarget = null; return; }
+  const r = tr.getBoundingClientRect();
+  const after = (e.clientY - r.top) > r.height/2;
+  tr.classList.add(after ? 'drop-after' : 'drop-before');
+  dropTarget = {key:tr.dataset.key, after};
+});
+listBody.addEventListener('drop', e => {
+  if (!dragKey || !dropTarget) return;
+  e.preventDefault();
+  const src = dragKey;
+  const t = dropTarget;
+  dragKey = null; dropTarget = null;
+  clearDropMarkers();
+  moveItem(src, t.key, t.after);
+});
+listBody.addEventListener('dragend', () => {
+  dragKey = null; dropTarget = null;
+  clearDropMarkers();
+  listBody.querySelectorAll('tr.dragging').forEach(el => el.classList.remove('dragging'));
+});
+
+/* =========================================================
+   详情渲染
+   ========================================================= */
+function field(label, attr, val){
+  return `<div class="field"><label>${label}</label>
+    <input type="text" ${attr} value="${esc(val)}"></div>`;
+}
+
+function boolHTML(attr, label, val){
+  return `<label class="bool-item">
+    <span>${label}</span>
+    <input type="checkbox" ${attr} ${val?'checked':''}>
+    <span class="track"></span>
+  </label>`;
+}
+
+function enumSelect(attr, map, cur){
+  const keys = Object.keys(map);
+  const opts = keys.map(k =>
+    `<option value="${esc(k)}"${k===cur?' selected':''}>${esc(map[k])} (${esc(k)})</option>`
+  ).join('');
+  const extra = keys.includes(cur) ? '' :
+    `<option value="${esc(cur)}" selected>${esc(cur)}（未在枚举中）</option>`;
+  return `<select ${attr}>${opts}${extra}</select>`;
+}
+
+function slotSelect(attr, cur){
+  const opts = [
+    `<option value=""${cur===null?' selected':''}>（未分配）</option>`,
+    [1,2,3,4].map(n => `<option value="${n}"${n===cur?' selected':''}>出战位 ${n}</option>`).join('')
+  ].join('');
+  return `<select ${attr}>${opts}</select>`;
+}
+
+function configSlotSelect(attr, cur){
+  const opts = [
+    `<option value=""${cur===null?' selected':''}>（未分配）</option>`,
+    [1,2,3,4].map(n => `<option value="${n}"${n===cur?' selected':''}>配置位 ${n}</option>`).join('')
+  ].join('');
+  return `<select ${attr}>${opts}</select>`;
+}
+
+function numFieldHTML(f, val){
+  return `<div class="field">
+    <div class="field-head">
+      <label>${esc(f.label)}</label>
+      ${f.hint ? `<span class="tagline">${esc(f.hint)}</span>` : ''}
+    </div>
+    <input type="number" step="${f.step}" min="${f.min}" data-num="${f.k}" value="${val}">
+  </div>`;
+}
+
+function renderCheckPanel(item){
+  const errs = [];
+  if (!damageValid(item.damageType)) errs.push(`damageType "${item.damageType}" 不在伤害枚举中`);
+  if (!attackValid(item.attackType)) errs.push(`attackType "${item.attackType}" 不在攻击枚举中`);
+  /* 出战位 / 配置位 冲突检查 */
+  if (item.activeSlot !== null){
+    const conflict = data.find(o => o !== item && o.activeSlot === item.activeSlot);
+    if (conflict) errs.push(`出战位 ${item.activeSlot} 与「${conflict._name || conflict.key}」冲突`);
+  }
+  if (item.configSlot !== null){
+    const conflict = data.find(o => o !== item && o.configSlot === item.configSlot);
+    if (conflict) errs.push(`配置位 ${item.configSlot} 与「${conflict._name || conflict.key}」冲突`);
+  }
+  if (!errs.length){
+    return `<div class="check-panel"><div class="row ok">✓ 随从字段校验通过。</div></div>`;
+  }
+  return `<div class="check-panel">
+    ${errs.map(e => `<div class="row err">⚠ ${esc(e)}</div>`).join('')}
+    <div class="row">这些不阻止导出，但运行时会按冲突处理或跳过。</div>
+  </div>`;
+}
+
+function renderDetail(){
+  const item = currentItem();
+  if (!item){
+    detail.innerHTML = `<p class="hint">← 从左侧选择一条随从进行编辑，或点击「＋ 新增」。</p>`;
+    return;
+  }
+  let h = '';
+
+  h += '<div class="section-title">基本信息</div>';
+  h += field('Key（对象键）', 'data-root="key"', item.key);
+  h += '<div class="grid2">';
+  h += field('_id（标识）', 'data-root="_id"', item._id);
+  h += field('_name（名字）', 'data-root="_name"', item._name);
+  h += '</div>';
+  h += boolHTML('data-root="_debugSample"', '_debugSample（调试样例）', item._debugSample);
+
+  h += '<div class="section-title">等级</div>';
+  h += '<div class="grid4">';
+  h += numFieldHTML(NUM_FIELDS[0], item.lv);
+  h += '</div>';
+
+  h += '<div class="section-title">战斗属性（12 字段）</div>';
+  h += '<div class="grid4">';
+  for (let i = 1; i < NUM_FIELDS.length; i++){
+    const f = NUM_FIELDS[i];
+    h += numFieldHTML(f, item[f.k]);
+  }
+  h += '</div>';
+
+  const cc = critChance(item.T_CRT);
+  h += `<div class="derived">
+    T_CRT 校验：<b>CRT × LUK × 0.01</b> = ${item.CRT} × ${item.LUK} × 0.01 = <b>${(item.CRT * item.LUK * 0.01).toFixed(4)}</b>
+    &nbsp;·&nbsp; 暴击率 = clamp(T_CRT × 0.05, 0.02, 0.75) = <b>${(cc*100).toFixed(2)}%</b>
+  </div>`;
+  h += `<button type="button" class="mini" data-recalc="1" style="margin-top:6px">按公式重算 T_CRT</button>`;
+
+  h += '<div class="section-title">攻击属性</div>';
+  h += '<div class="grid2">';
+  h += `<div class="field"><label>damageType 伤害类型</label>
+    ${enumSelect('data-root="damageType"', damageTypes(), item.damageType)}
+    <div class="tagline">引用 damage_types.json；物理/魔法</div>
+  </div>`;
+  h += `<div class="field"><label>attackType 攻击类型</label>
+    ${enumSelect('data-root="attackType"', attackTypes(), item.attackType)}
+    <div class="tagline">引用 attack_types.json；普通/重击/技能</div>
+  </div>`;
+  h += '</div>';
+
+  h += '<div class="section-title">随从位</div>';
+  h += '<div class="grid2">';
+  h += `<div class="field"><label>activeSlot 出战位</label>
+    ${slotSelect('data-root="activeSlot"', item.activeSlot)}
+    <div class="tagline">1~4 或未分配；同时只能一个随从占同一出战位</div>
+  </div>`;
+  h += `<div class="field"><label>configSlot 配置位</label>
+    ${configSlotSelect('data-root="configSlot"', item.configSlot)}
+    <div class="tagline">1~4 或未分配；用于编辑面板</div>
+  </div>`;
+  h += '</div>';
+  h += boolHTML('data-root="independentCast"', 'independentCast（独立读条）', item.independentCast);
+  h += `<div class="tagline">为 true 时随从使用自己的 secondsPerAttack 读条；为 false 时随玩家同步。</div>`;
+
+  h += renderCheckPanel(item);
+
+  detail.innerHTML = h;
+}
+
+/* =========================================================
+   编辑事件
+   ========================================================= */
+function onEdit(e){
+  const el = e.target;
+  const item = currentItem();
+  if (!item) return;
+
+  /* 重算按钮 */
+  if (el.dataset && el.dataset.recalc){
+    item.T_CRT = +(item.CRT * item.LUK * 0.01).toFixed(4);
+    renderDetail(); renderList(); save();
+    return;
+  }
+
+  if (el.dataset.root){
+    const k = el.dataset.root;
+
+    if (k === 'key'){
+      if (e.type !== 'change') return;
+      const nv = String(el.value).trim();
+      if (!nv){ el.value = item.key; return; }
+      if (nv === item.key) return;
+      if (data.some(d => d !== item && d.key === nv)){
+        alert('Key 已存在：' + nv);
+        el.value = item.key;
+        return;
+      }
+      item.key = nv;
+      if (!item._id || item._id === selectedKey) item._id = nv;
+      selectedKey = nv;
+      renderList(); renderDetail(); save();
+      return;
+    }
+
+    if (k === '_debugSample' || k === 'independentCast'){
+      item[k] = el.checked;
+      renderList();
+      if (k === '_debugSample') renderDetail();
+      save();
+      return;
+    }
+
+    if (k === 'activeSlot' || k === 'configSlot'){
+      const v = el.value === '' ? null : Math.max(1, Math.min(4, Math.floor(Number(el.value))));
+      item[k] = v;
+      renderList(); renderDetail(); save();
+      return;
+    }
+
+    if (k === 'damageType' || k === 'attackType'){
+      item[k] = el.value;
+      renderList(); renderDetail(); save();
+      return;
+    }
+
+    item[k] = el.value;
+    renderList(); save();
+    return;
+  }
+
+  if (el.dataset.num){
+    const k = el.dataset.num;
+    let v = el.value === '' ? 0 : Number(el.value);
+    if (!isFinite(v)) v = 0;
+    if (k === 'lv' || k === 'HP' || k === 'SPD') v = Math.max(1, Math.floor(v));
+    item[k] = v;
+    if (k === 'CRT' || k === 'LUK' || k === 'T_CRT'){
+      const hint = detail.querySelector('.derived');
+      if (hint){
+        const cc = critChance(item.T_CRT);
+        hint.innerHTML = `T_CRT 校验：<b>CRT × LUK × 0.01</b> = ${item.CRT} × ${item.LUK} × 0.01 = <b>${(item.CRT * item.LUK * 0.01).toFixed(4)}</b>
+          &nbsp;·&nbsp; 暴击率 = clamp(T_CRT × 0.05, 0.02, 0.75) = <b>${(cc*100).toFixed(2)}%</b>`;
+      }
+    }
+    renderList(); save();
+    return;
+  }
+}
+
+detail.addEventListener('click', e => {
+  const btn = e.target.closest('[data-recalc]');
+  if (btn) onEdit({target: btn, type: 'click', dataset: btn.dataset});
+});
+detail.addEventListener('input',  onEdit);
+detail.addEventListener('change', onEdit);
+
+/* =========================================================
+   列表交互
+   ========================================================= */
+listBody.addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if (!tr || !tr.dataset.key) return;
+  if (tr.dataset.key === selectedKey) return;
+  selectedKey = tr.dataset.key;
+  renderList(); renderDetail();
+});
+
+/* =========================================================
+   新增 / 复制 / 删除
+   ========================================================= */
+function nextKey(){
+  let max = 0;
+  data.forEach(d => {
+    const m = String(d.key).match(/^c(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1],10));
+  });
+  return 'c' + (max + 1);
+}
+
+document.getElementById('addBtn').onclick = () => {
+  const key = nextKey();
+  const it = normalizeEntry(key, {
+    _id: key, _name: '新随从', _debugSample: false,
+    lv:1, HP:100, MP:100, STR:100, DEF:100, MGA:100, MGD:100,
+    SPD:100, CRT:1.001, T_CRT:1.001, LUK:100, GP:1, Cont:0,
+    damageType:'physical', attackType:'normal',
+    activeSlot: null, configSlot: null, independentCast: false
+  });
+  data.push(it);
+  selectedKey = it.key;
+  renderList(); renderDetail(); save();
+};
+
+document.getElementById('dupBtn').onclick = () => {
+  const src = currentItem();
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.key = nextKey();
+  copy._id = copy.key;
+  copy._name = (copy._name || '') + '_副本';
+  copy._debugSample = false;
+  copy.activeSlot = null;
+  copy.configSlot = null;
+  data.push(copy);
+  selectedKey = copy.key;
+  renderList(); renderDetail(); save();
+};
+
+document.getElementById('delBtn').onclick = () => {
+  if (!selectedKey) return;
+  if (!confirm('确认删除 ' + selectedKey + ' ?')) return;
+  const idx = data.findIndex(d => d.key === selectedKey);
+  if (idx < 0) return;
+  data.splice(idx,1);
+  selectedKey = data.length ? data[Math.min(idx,data.length-1)].key : null;
+  renderList(); renderDetail(); save();
+};
+
+/* =========================================================
+   导入 / 导出
+   ========================================================= */
+document.getElementById('importBtn').onclick = () => {
+  document.getElementById('importInput').click();
+};
+
+document.getElementById('importInput').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{
+      const obj = JSON.parse(ev.target.result);
+      if (Array.isArray(obj)){
+        data = obj.map((x,i) => normalizeEntry(x.key != null ? x.key : ('c'+(i+1)), x));
+      } else if (obj && typeof obj === 'object'){
+        data = Object.keys(obj).map(k => normalizeEntry(k, obj[k]));
+      } else {
+        throw new Error('根节点必须是对象或数组');
+      }
+      selectedKey = data.length ? data[0].key : null;
+      renderList(); renderDetail(); save();
+    }catch(err){
+      alert('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+document.getElementById('loadDmgBtn').onclick = () => dmgFile.click();
+document.getElementById('loadAtkBtn').onclick = () => atkFile.click();
+
+dmgFile.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{ applyDamageTypes(JSON.parse(ev.target.result)); }
+    catch(err){ alert('damage_types.json 解析失败：' + err.message); }
+  };
+  reader.readAsText(file);
+  dmgFile.value = '';
+});
+
+atkFile.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try{ applyAttackTypes(JSON.parse(ev.target.result)); }
+    catch(err){ alert('attack_types.json 解析失败：' + err.message); }
+  };
+  reader.readAsText(file);
+  atkFile.value = '';
+});
+
+document.getElementById('revalidateBtn').onclick = () => {
+  renderList(); renderDetail();
+};
+
+function indentBlock(str, level){
+  const pad = '  '.repeat(level);
+  return str.split('\n').map((l,i) => i === 0 ? l : pad + l).join('\n');
+}
+
+function buildEntry(d){
+  const out = {};
+  ENTRY_ORDER.forEach(k => {
+    if (k === '_debugSample'){
+      if (d._debugSample) out[k] = true;
+      return;
+    }
+    if (k === 'activeSlot' || k === 'configSlot'){
+      if (d[k] !== null && d[k] !== undefined) out[k] = d[k];
+      return;
+    }
+    if (k === 'independentCast'){
+      if (d[k]) out[k] = true;
+      return;
+    }
+    if (d[k] !== undefined && d[k] !== null) out[k] = d[k];
+  });
+  Object.keys(d).forEach(k => {
+    if (!(k in out) && k !== 'key') out[k] = d[k];
+  });
+  return out;
+}
+
+function buildJSONText(){
+  if (!data.length) return '{}';
+  const parts = data.map(d => {
+    return '  ' + JSON.stringify(d.key) + ': ' +
+      indentBlock(JSON.stringify(buildEntry(d), null, 2), 1);
+  });
+  return '{\n' + parts.join(',\n') + '\n}';
+}
+
+document.getElementById('exportBtn').onclick = () => {
+  const text = buildJSONText();
+  const blob = new Blob([text], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'companions.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* =========================================================
+   筛选
+   ========================================================= */
+searchInput.addEventListener('input', renderList);
+
+/* =========================================================
+   启动
+   ========================================================= */
+(function init(){
+  const raw = localStorage.getItem(LS_KEY);
+  if (raw){
+    try{
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)){
+        data = parsed.map(d => normalizeEntry(d.key, d));
+      } else if (parsed && typeof parsed === 'object'){
+        data = Object.keys(parsed).map(k => normalizeEntry(k, parsed[k]));
+      } else {
+        data = defaultData();
+      }
+    }catch(_){ data = defaultData(); }
+  } else {
+    data = defaultData();
+  }
+  selectedKey = data.length ? data[0].key : null;
+  updateRefStatus();
+  renderList(); renderDetail();
+})();
+
+})();
+</script>
+</body>
+</html>
